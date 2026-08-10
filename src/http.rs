@@ -11,27 +11,56 @@ impl Request {
     pub fn to_str(&self) -> String {
         String::from_utf8_lossy(&self.raw).to_string()
     }
+
+    fn find_header(&self, header: &str) -> Option<String> {
+        let mut headers = [httparse::EMPTY_HEADER; 64];
+        let mut request = httparse::Request::new(&mut headers);
+        match request.parse(&self.raw) {
+            Ok(httparse::Status::Complete(_)) => {
+                for i in request.headers {
+                    if i.name.eq_ignore_ascii_case(header) {
+                        return Some(
+                            String::from_utf8_lossy(i.value)
+                            .trim()
+                            .to_string(),
+                        );
+                    }
+                }
+
+                None
+            }
+
+            _ => None,
+        }
+
+    }
+
     pub fn host(&self) -> Option<String> {
+        self.find_header("Host")
+    }
+
+    pub fn method(&self) -> Option<String> {
         let mut headers = [httparse::EMPTY_HEADER; 64];
         let mut request = httparse::Request::new(&mut headers);
 
         match request.parse(&self.raw) {
             Ok(httparse::Status::Complete(_)) => {
-                for header in request.headers {
-                    if header.name.eq_ignore_ascii_case("Host") {
-                        return Some(
-                            String::from_utf8_lossy(header.value)
-                                .trim()
-                                .to_string()
-                        );
-                    }
-                }
-                None
+                request.method.map(|method| method.to_string())
             }
             _ => None,
         }
     }
 
+}
+
+pub struct Response {
+    pub raw: Vec<u8>,
+}
+
+impl Response {
+    pub fn to_str(&self) -> String {
+        String::from_utf8_lossy(&self.raw).to_string()
+    }
 }
 
 pub async fn read_request(socket: &mut TcpStream) -> io::Result<Request> {
@@ -82,16 +111,6 @@ pub async fn read_request(socket: &mut TcpStream) -> io::Result<Request> {
         Ok(Request { raw: vec })
 }
 
-
-pub struct Response {
-    pub raw: Vec<u8>,
-}
-
-impl Response {
-    pub fn to_str(&self) -> String {
-        String::from_utf8_lossy(&self.raw).to_string()
-    }
-}
 
 pub async fn read_response(socket: &mut TcpStream) -> io::Result<Response> {
         let mut buff = [0u8; 4096];
