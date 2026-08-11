@@ -6,6 +6,7 @@ mod http;
 mod editor;
 mod connections;
 mod repeater;
+mod app;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {

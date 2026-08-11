@@ -3,6 +3,7 @@ use tokio::io::{AsyncReadExt};
 use std::io;
 
 
+#[derive(Clone)]
 pub struct Request {
     pub raw: Vec<u8>,
 }

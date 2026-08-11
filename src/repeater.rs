@@ -3,6 +3,7 @@ use std::io;
 
 use crate::http;
 use crate::connections;
+use crate::editor;
 
 pub struct Repeater {
     pub request: http::Request,
@@ -19,6 +20,14 @@ impl Repeater {
     pub async fn send(&mut self) -> io::Result<()> {
         let response = connections::send_request(&self.request).await?;
         self.response = Some(response);
+
+        Ok(())
+    }
+
+    pub fn edit(&mut self) -> io::Result<()>{
+        let edited_data = editor::edit(&self.request.to_str())?;
+
+        self.request.raw = edited_data.into_bytes();
 
         Ok(())
     }

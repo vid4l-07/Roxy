@@ -5,17 +5,6 @@ use std::io;
 use crate::http;
 use crate::editor;
 
-fn intercept_request(request: &http::Request) -> io::Result<http::Request>{
-    println!("\n\n{}", request.to_str());
-
-    println!("Press Enter to continue...");
-    std::io::stdin().read_line(&mut String::new())?;
-
-    let edited = editor::edit(&request.to_str())?;
-
-    Ok(http::Request { raw: edited.into_bytes() })
-}
-
 async fn connect_to_server(request: &http::Request) -> io::Result<TcpStream> {
     let host = request.host().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing Host header"))?;
 
@@ -39,21 +28,12 @@ pub async fn send_request(request: &http::Request) -> io::Result<http::Response>
 pub async fn handle_connection(mut client: TcpStream, intercept: bool) -> io::Result<()> {
     let request = http::read_request(&mut client).await?;
 
-    println!("Method: {:?}", request.method());
-
-    let request = if intercept { 
-        intercept_request(&request)? 
-    } else { 
-        request 
-    };
-
     match request.method().as_deref() {
         Some("CONNECT") => {
             handle_https(client, &request).await?;
         }
 
         _ => {
-
             let response = send_request(&request).await?;
 
             println!("{}", response.to_str());
