@@ -3,7 +3,6 @@ use tokio::io::{AsyncWriteExt};
 use std::io;
 
 use crate::http;
-use crate::editor;
 
 async fn connect_to_server(request: &http::Request) -> io::Result<TcpStream> {
     let host = request.host().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing Host header"))?;
@@ -17,6 +16,12 @@ async fn connect_to_server(request: &http::Request) -> io::Result<TcpStream> {
     TcpStream::connect(address).await
 }
 
+
+
+pub async fn get_request(client: &mut TcpStream) -> io::Result<http::Request> {
+    http::read_request(client).await
+}
+
 pub async fn send_request(request: &http::Request) -> io::Result<http::Response> {
     let mut server = connect_to_server(&request).await?;
 
@@ -25,33 +30,26 @@ pub async fn send_request(request: &http::Request) -> io::Result<http::Response>
     http::read_response(&mut server).await
 }
 
-pub async fn handle_connection(mut client: TcpStream, intercept: bool) -> io::Result<()> {
-    let request = http::read_request(&mut client).await?;
-
-    match request.method().as_deref() {
-        Some("CONNECT") => {
-            handle_https(client, &request).await?;
-        }
-
-        _ => {
-            let response = send_request(&request).await?;
-
-            println!("{}", response.to_str());
-            client.write_all(&response.raw).await?;
-        }
-    }
-
-    Ok(())
+pub async fn send_response(client: &mut TcpStream, response: &http::Response) -> io::Result<()> {
+    client.write_all(&response.raw).await
 }
 
-async fn handle_https(mut client: TcpStream, request: &http::Request) -> io::Result<()> {
+pub async fn forward(client: &mut TcpStream, request: &http::Request) -> io::Result<http::Response>{
+    let response = send_request(request).await?;
+    send_response(client, &response).await?;
+    Ok(response)
+}
+
+// HTTPS
+
+async fn handle_https(client: &mut TcpStream, request: &http::Request) -> io::Result<()> {
     let host = request.host().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing Host header"))?;
 
     let mut server = TcpStream::connect(&host).await?;
 
     client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
 
-    tokio::io::copy_bidirectional(&mut client, &mut server).await?;
+    tokio::io::copy_bidirectional(client, &mut server).await?;
 
     Ok(())
 }

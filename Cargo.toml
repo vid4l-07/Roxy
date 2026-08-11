@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ratatui = "0.30.2"
+crossterm = "0.29.0"
 httparse = "1.10.1"
 tempfile = "3.27.0"
 tokio = { version = "1.53.1", features = ["full"] }
