@@ -1,5 +1,6 @@
 #![allow(unused)]
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 use std::io;
 
 mod http;
@@ -8,12 +9,21 @@ mod connections;
 mod repeater;
 mod app;
 mod tui;
+mod proxy;
+mod events;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    let (proxy_sender, proxy_receiver) = mpsc::channel::<events::ProxyEvents>(32);
+    let (tui_sender, tui_receiver) = mpsc::channel::<events::TuiEvents>(32);
+
     let mut app = app::App::new();
 
-    tui::run(&mut app).await;
+    tokio::spawn(async move {
+        proxy::start(proxy_sender, tui_receiver).await
+    });
+
+    tui::run(&mut app, tui_sender, proxy_receiver).await;
 
     Ok(())
 

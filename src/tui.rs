@@ -1,23 +1,49 @@
-use crossterm::event::{self, KeyCode, Event};
+use crossterm::event::{Event, EventStream, KeyCode};
+use futures::StreamExt;
+
 use ratatui::widgets::Paragraph;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::Frame;
+
+use tokio::sync::mpsc;
+
 use std::io;
 
 use crate::app::{self, App};
+use crate::events;
 
 // General
 
-pub async fn run(app: &mut App) -> io::Result<()> {
+pub async fn run(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut receiver: mpsc::Receiver<events::ProxyEvents>) -> io::Result<()> {
     let mut terminal = ratatui::init();
+    let mut events = EventStream::new();
 
     loop {
         terminal.draw(|frame| render(frame, app))?;
 
-        if let Event::Key(key) = event::read()? {
-            if handle_input(app, key.code, &mut terminal).await? {
-                ratatui::restore();
-                return Ok(());
+        tokio::select! {
+            event = events.next() => {
+                if let Some(Ok(Event::Key(key))) = event {
+                    if handle_input(app, key.code, &mut terminal, &sender).await? {
+                        ratatui::restore();
+                        return Ok(());
+                    }
+                }
+            }
+
+            event = receiver.recv() => {
+                match event {
+                    Some(events::ProxyEvents::ReceivedRequest(request)) => {
+                        app.intercepted_request = Some(request);
+                    }
+
+                    None => {
+                        return Err(io::Error::new(
+                                io::ErrorKind::BrokenPipe,
+                                "Proxy channel closed",
+                        ));
+                    }
+                }
             }
         }
     }
@@ -30,13 +56,13 @@ fn render(frame: &mut Frame, app: &App) {
     }
 }
 
-async fn handle_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::DefaultTerminal) -> io::Result<bool>{
+async fn handle_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::DefaultTerminal, sender: &mpsc::Sender<events::TuiEvents>) -> io::Result<bool>{
     if key == KeyCode::Char('q') {
         return Ok(true);
     }
     
     match app.screen {
-        app::Screen::Proxy => handle_proxy_input(app, key, terminal)?,
+        app::Screen::Proxy => handle_proxy_input(app, key, terminal, sender).await?,
         app::Screen::Repeater => handle_repeater_input(app, key, terminal).await?,
     }
     Ok(false)
@@ -59,13 +85,25 @@ fn render_proxy(frame: &mut Frame, app: &App) {
     );
 }
 
-fn handle_proxy_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
+async fn handle_proxy_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::DefaultTerminal, sender: &mpsc::Sender<events::TuiEvents>) -> io::Result<()> {
     match key {
         KeyCode::Char('i') => {
-            app.intercept = !app.intercept
+            app.intercept = !app.intercept;
+            sender.send(events::TuiEvents::SetIntercept(app.intercept)).await.map_err(|_| 
+                io::Error::new(io::ErrorKind::BrokenPipe, "TUI channel closed")
+            )?;
         }
+
         KeyCode::Enter => {
-            // Forward
+            match &app.intercepted_request {
+                Some(request) => {
+                    sender.send(events::TuiEvents::Forward(request.clone())).await.map_err(|_| 
+                        io::Error::new(io::ErrorKind::BrokenPipe, "TUI channel closed")
+                    )?;
+                    app.intercepted_request = None;
+                }
+                None => {}
+            }
         }
 
         KeyCode::Char('e') => {
