@@ -11,6 +11,7 @@ pub struct App {
     pub screen: Screen,
     pub intercepted_request: Option<http::Request>,
     pub repeaters: Vec<repeater::Repeater>,
+    pub repeaters_names: Vec<String>,
     pub selected_repeater: usize,
     pub intercept: bool,
 }
@@ -21,6 +22,7 @@ impl App {
             screen: Screen::Proxy,
             intercepted_request: None,
             repeaters: Vec::new(),
+            repeaters_names: Vec::new(),
             selected_repeater: 0,
             intercept: false,
         }
