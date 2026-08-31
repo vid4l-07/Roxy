@@ -4,9 +4,11 @@
 
 Minimal terminal-based HTTP intercepting proxy.
 
-[Features](#features) · [Installation](#installation) · [Usage](#usage) · [Roadmap](#roadmap)
-
 </div>
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
 
 ## Features
 
