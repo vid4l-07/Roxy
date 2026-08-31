@@ -29,7 +29,7 @@ cd Roxy
 cargo build --release
 ```
 
-The binary will be available at ```target/release/miburp```.
+The binary will be available at ```target/release/```.
 
 ---
 
