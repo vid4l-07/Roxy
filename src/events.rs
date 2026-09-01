@@ -6,5 +6,7 @@ pub enum TuiEvents {
 }
 
 pub enum ProxyEvents {
-    ReceivedRequest(http::Request)
+    ReceivedRequest(http::Request),
+    Error(String),
+    FatalError(String)
 }

@@ -1,24 +1,51 @@
 use crossterm::event::{Event, EventStream, KeyCode};
 use futures::StreamExt;
 
-use ratatui::prelude::*;
-use ratatui::style::{Color, Style};
-use ratatui::widgets::{Block, Paragraph, Tabs, Borders, BorderType, Padding};
-use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::Frame;
+use ratatui::{
+    prelude::*,
+    style::{Color, Style},
+    widgets::{Block, Paragraph, Tabs, Borders, BorderType, Padding},
+    layout::{Constraint, Direction, Layout},
+    Frame
+};
 
 use tokio::sync::mpsc;
 
 use std::io;
 
-use crate::app::{self, App};
-use crate::events;
-use crate::repeater;
+use crate::{app::{Screen, App}, events, repeater, popups};
+
+// Secondary
+
+pub fn error_popup(app: &mut App, error: impl Into<String>){
+    app.popups.push(
+        popups::Popup::Text(
+            popups::TextPopup {
+                message: error.into(),
+                title: " Error ".into(),
+                color: Color::Red,
+            }
+        )
+    );
+
+}
 
 // General
-
 pub async fn run(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut receiver: mpsc::Receiver<events::ProxyEvents>) -> io::Result<()> {
     let mut terminal = ratatui::init();
+
+    let result = main_loop(app, sender, receiver, &mut terminal).await;
+
+    ratatui::restore();
+
+    if let Err(ref e) = result {
+        eprintln!("Fatal error: {}", e);
+    }
+
+    result
+}
+
+async fn main_loop(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut receiver: mpsc::Receiver<events::ProxyEvents>, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
     let mut events = EventStream::new();
 
     loop {
@@ -27,8 +54,7 @@ pub async fn run(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut rec
         tokio::select! {
             event = events.next() => {
                 if let Some(Ok(Event::Key(key))) = event {
-                    if handle_input(app, key.code, &mut terminal, &sender).await? {
-                        ratatui::restore();
+                    if handle_input(app, key.code, terminal, &sender).await? {
                         return Ok(());
                     }
                 }
@@ -38,6 +64,17 @@ pub async fn run(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut rec
                 match event {
                     Some(events::ProxyEvents::ReceivedRequest(request)) => {
                         app.intercepted_request = Some(request);
+                    }
+
+                    Some(events::ProxyEvents::Error(error)) => {
+                        error_popup(app, error);
+                    }
+
+                    Some(events::ProxyEvents::FatalError(error)) => {
+                        return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                error,
+                        ));
                     }
 
                     None => {
@@ -54,8 +91,12 @@ pub async fn run(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut rec
 
 fn render(frame: &mut Frame, app: &App) {
     match app.screen {
-        app::Screen::Proxy => render_proxy(frame, app),
-        app::Screen::Repeater => render_repeater(frame, app),
+        Screen::Proxy => render_proxy(frame, app),
+        Screen::Repeater => render_repeater(frame, app),
+    }
+
+    if let Some(popup) = app.popups.last() {
+        popup.render(frame);
     }
 }
 
@@ -63,10 +104,21 @@ async fn handle_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::Defau
     if key == KeyCode::Char('q') {
         return Ok(true);
     }
+
+    if let Some(popup) = app.popups.last() {
+        match popup.handle_input(key) {
+            popups::PopupAction::Close => {
+                app.popups.pop();
+            }
+            popups::PopupAction::None => {}
+        }
+
+        return Ok(false);
+    }
     
     match app.screen {
-        app::Screen::Proxy => handle_proxy_input(app, key, terminal, sender).await?,
-        app::Screen::Repeater => handle_repeater_input(app, key, terminal).await?,
+        Screen::Proxy => handle_proxy_input(app, key, terminal, sender).await?,
+        Screen::Repeater => handle_repeater_input(app, key, terminal).await?,
     }
     Ok(false)
 }
@@ -134,17 +186,23 @@ async fn handle_proxy_input(app: &mut App, key: KeyCode, terminal: &mut ratatui:
         }
 
         KeyCode::Char('e') => {
-            ratatui::restore();
-            match &mut app.intercepted_request {
-                Some(request) => {
-                    let edited = crate::editor::edit(&request.to_str())?;
-                    request.raw = edited.into_bytes();
+            let request = app.intercepted_request
+                .as_ref()
+                .map(|request| request.to_str())
+                .unwrap_or_default();
+
+            match crate::editor::edit(&request) {
+                Ok(edited) => {
+                    app.intercepted_request = Some(crate::http::Request {
+                        raw: edited.into_bytes(),
+                    });
                 }
-                None => {
-                    let edited = crate::editor::edit("")?;
-                    app.intercepted_request = Some(crate::http::Request { raw: edited.into_bytes() });
+
+                Err(e) => {
+                    error_popup(app, e.to_string());
                 }
             }
+
             *terminal = ratatui::init();
         }
 
@@ -155,12 +213,12 @@ async fn handle_proxy_input(app: &mut App, key: KeyCode, terminal: &mut ratatui:
                 app.repeaters.push(repeater);
                 app.repeaters_names.push(app.repeaters.len().to_string());
                 app.selected_repeater = app.repeaters.len() - 1;
-                app.screen = app::Screen::Repeater;
+                app.screen = Screen::Repeater;
             }
         }
 
         KeyCode::Tab => {
-            app.screen = app::Screen::Repeater;
+            app.screen = Screen::Repeater;
         }
 
         _ => {}
@@ -197,10 +255,6 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     let tabs = Tabs::new(app.repeaters_names.iter().map(|title| Line::from(title.clone())).collect::<Vec<_>>())
         .block(
             Block::bordered().border_type(BorderType::Rounded).title(" Repeaters "),
-        ).highlight_style(
-            Style::default()
-            .fg(Color::Blue)
-            .add_modifier(Modifier::BOLD),
         ).select(app.selected_repeater);
     frame.render_widget(tabs, vertical[0]);
 
@@ -230,7 +284,9 @@ async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratat
     match key {
         KeyCode::Enter => {
             if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
-                repeater.send().await?;
+                if let Err(e) = repeater.send().await {
+                    error_popup(app, e.to_string());
+                }
             }
         }
 
@@ -238,9 +294,13 @@ async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratat
             if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
                 ratatui::restore();
 
-                repeater.edit()?;
+                let result = repeater.edit();
 
                 *terminal = ratatui::init();
+
+                if let Err(e) = result {
+                    error_popup(app, e.to_string());
+                }
             }
         }
 
@@ -258,7 +318,7 @@ async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratat
         }
 
         KeyCode::Tab => {
-            app.screen = app::Screen::Proxy;
+            app.screen = Screen::Proxy;
         }
 
         _ => {}

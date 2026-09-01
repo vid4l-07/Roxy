@@ -7,11 +7,21 @@ pub fn edit(initial: &str) -> io::Result<String> {
     file.write_all(initial.as_bytes())?;
     file.flush()?;
 
-    let editor = env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+    let editor = env::var("EDITOR")
+        .map_err(|_| io::Error::new(
+                io::ErrorKind::NotFound,
+                "Environment variable EDITOR not found",
+        ))?;
 
     let status = Command::new(&editor)
         .arg(file.path())
-        .status()?;
+        .status()
+        .map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to launch editor '{editor}': {e}"),
+            )
+        })?;
 
     if !status.success() {
         return Err(io::Error::new(
@@ -23,3 +33,4 @@ pub fn edit(initial: &str) -> io::Result<String> {
     let edited = fs::read_to_string(file.path())?;
     Ok(edited)
 }
+
