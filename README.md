@@ -4,9 +4,11 @@
 
 Minimal terminal-based HTTP intercepting proxy.
 
-[Features](#features) · [Installation](#installation) · [Usage](#usage) · [Roadmap](#roadmap)
-
 </div>
+
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
 
 ## Features
 
@@ -27,7 +29,7 @@ cd Roxy
 cargo build --release
 ```
 
-The binary will be available at ```target/release/miburp```.
+The binary will be available at ```target/release/```.
 
 ---
 
