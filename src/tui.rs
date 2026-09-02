@@ -133,25 +133,40 @@ fn render_proxy(frame: &mut Frame, app: &App) {
         Constraint::Length(1),
     ]).split(frame.area());
 
-    let title = Paragraph::new("Proxy").block(
-        Block::default()
-            .padding(Padding::new(2, 0, 1, 1))
-    );
+    let status_color = if app.intercept {
+        Color::Green
+    } else {
+        Color::Red
+    };
+    let status_text = if app.intercept { "ON" } else { "OFF" };
 
-    frame.render_widget(title, vertical[0]);
+    let line = Line::from(vec![
+        Span::styled(
+            " Proxy ",
+            Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("  Intercept: "),
+        Span::styled(
+            format!("[{}]", status_text),
+            Style::default()
+            .fg(status_color)
+            .add_modifier(Modifier::BOLD),
+        ),
+    ]);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded);
+    let paragraph = Paragraph::new(line).block(block);
+
+    frame.render_widget(paragraph, vertical[0]);
 
     let request_scroll: u16 = 0;
     let request_info = Paragraph::new(request).block(
         Block::bordered().border_type(BorderType::Rounded).title(Line::from(vec![
-        Span::raw(" Intercept: "),
-        Span::styled(
-            if app.intercept { "ON " } else { "OFF " },
-            if app.intercept {
-                Style::default().fg(Color::Green)
-            } else {
-                Style::default().fg(Color::Red)
-            },
-        ),
+        Span::raw(" Request "),
         ]))).scroll((request_scroll, 0));
 
     frame.render_widget(request_info, vertical[1]);
