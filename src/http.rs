@@ -184,6 +184,12 @@ impl Request {
             }
         }
 
+        if let Some((_, value)) = headers.iter_mut().find(|(name, _)| name.eq_ignore_ascii_case("Content-Length")) {
+            *value = body.len().to_string();
+        } else if !body.is_empty() {
+            headers.push(("Content-Length".into(), body.len().to_string()));
+        }
+
         Self {
             method,
             target,

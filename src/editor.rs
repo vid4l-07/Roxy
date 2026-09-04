@@ -31,6 +31,8 @@ pub fn edit(initial: &str) -> io::Result<String> {
     }
 
     let edited = fs::read_to_string(file.path())?;
-    Ok(edited)
+    let edited = edited.strip_suffix("\r\n").unwrap_or(&edited);
+
+    Ok(edited.to_string())
 }
 
