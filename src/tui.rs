@@ -182,7 +182,7 @@ fn render_proxy(frame: &mut Frame, app: &App) {
     frame.render_widget(request_info, vertical[1]);
 
     let help = Paragraph::new(
-        "[↑↓] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [r] Send to Repeter",
+        "[↑↓] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [i] Toggle Intercept  [e] Edit  [r] Send to Repeter",
     )
         .alignment(Alignment::Right)
         .block(
@@ -292,11 +292,13 @@ fn render_repeater(frame: &mut Frame, app: &App) {
 
     if let Some(repeater) = &app.repeaters.get(app.selected_repeater) {
         if !repeater.request.host.is_empty() {
-            block = block.title_bottom(format!(
-                    " Host: {}:{} ",
-                    repeater.request.host,
-                    repeater.request.port
-            ));
+            block = block.title_bottom(
+                Line::styled(
+                    format!(" Host: {}:{} ", repeater.request.host, repeater.request.port),
+                    Style::default().fg(Color::Yellow),
+                )
+            );
+
         }
     }
 

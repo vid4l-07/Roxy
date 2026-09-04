@@ -12,8 +12,23 @@ mod proxy;
 mod events;
 mod popups;
 
+fn wellcome_screen() {
+    print!("
+  ██████╗  ██████╗ ██╗  ██╗██╗   ██╗
+  ██╔══██╗██╔═══██╗╚██╗██╔╝╚██╗ ██╔╝
+  ██████╔╝██║   ██║ ╚███╔╝  ╚████╔╝ 
+  ██╔══██╗██║   ██║ ██╔██╗   ╚██╔╝  
+  ██║  ██║╚██████╔╝██╔╝ ██╗   ██║   
+  ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
+
+  - You can contribute on github: \x1b[33mhttps://github.com/vid4l-07/Roxy\x1b[0m
+");
+
+}
+
 #[tokio::main]
 async fn main() {
+    wellcome_screen();
     let (proxy_sender, proxy_receiver) = mpsc::channel::<events::ProxyEvents>(32);
     let (tui_sender, tui_receiver) = mpsc::channel::<events::TuiEvents>(32);
 
