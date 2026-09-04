@@ -1,4 +1,4 @@
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpStream;
 use tokio::io::{AsyncWriteExt};
 use std::io;
 
@@ -32,20 +32,6 @@ pub async fn forward(client: &mut TcpStream, request: &http::Request) -> io::Res
     let response = send_request(request).await?;
     send_response(client, &response).await?;
     Ok(response)
-}
-
-// HTTPS
-
-async fn handle_https(client: &mut TcpStream, request: &http::Request) -> io::Result<()> {
-    let host = &request.host;
-
-    let mut server = TcpStream::connect(&host).await?;
-
-    client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
-
-    tokio::io::copy_bidirectional(client, &mut server).await?;
-
-    Ok(())
 }
 
 

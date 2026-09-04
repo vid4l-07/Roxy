@@ -45,16 +45,14 @@ impl Request {
                     io::ErrorKind::InvalidData,
                     "Missing HTTP method",
                 )
-            })?
-        .to_string();
+            })?.to_string();
 
         let target = request.path.ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     "Missing request target",
                 )
-            })?
-        .to_string();
+            })?.to_string();
 
         let version = request.version.ok_or_else(|| {
                 io::Error::new(
@@ -68,9 +66,7 @@ impl Request {
         for header in request.headers {
             let name = header.name.to_string();
 
-            let value = String::from_utf8_lossy(header.value)
-                .trim()
-                .to_string();
+            let value = String::from_utf8_lossy(header.value).trim().to_string();
 
             request_headers.push((name, value));
         }
@@ -136,15 +132,12 @@ impl Request {
     }
 
     fn parse_host(headers: &[(String, String)]) -> io::Result<(String, u16)> {
-        let host = headers
-            .iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case("Host"))
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Missing Host header",
-                )
-            })?;
+        let host = headers.iter().find(|(name, _)| name.eq_ignore_ascii_case("Host")).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing Host",
+            )
+        })?;
 
         if let Some((host, port)) = host.1.rsplit_once(':') {
             let port = port.parse::<u16>().map_err(|_| {
@@ -161,7 +154,11 @@ impl Request {
     }
 
     pub fn from_edited(data: &str, host: String, port: u16) -> Self {
-        let mut lines = data.split("\r\n");
+        let (headers_part, body) = data
+            .split_once("\r\n\r\n")
+            .unwrap_or((data, ""));
+
+        let mut lines = headers_part.split("\r\n");
 
         let request_line = lines.next().unwrap_or("");
 
@@ -169,6 +166,7 @@ impl Request {
 
         let method = parts.next().unwrap_or("").to_string();
         let target = parts.next().unwrap_or("").to_string();
+
         let version = parts
             .next()
             .and_then(|version| version.strip_prefix("HTTP/1."))
@@ -178,14 +176,10 @@ impl Request {
         let mut headers = Vec::new();
 
         for line in lines {
-            if line.is_empty() {
-                break;
-            }
-
             if let Some((name, value)) = line.split_once(':') {
                 headers.push((
-                    name.trim().to_string(),
-                    value.trim().to_string(),
+                        name.trim().to_string(),
+                        value.trim().to_string(),
                 ));
             }
         }
@@ -195,12 +189,11 @@ impl Request {
             target,
             version,
             headers,
-            body: Vec::new(),
+            body: body.as_bytes().to_vec(),
             host,
             port,
         }
     }
-
 
     // Transformations
     pub fn to_bytes(&self) -> Vec<u8> {

@@ -5,7 +5,7 @@ use tokio::{
 
 use std::io;
 
-use crate::{connections, events};
+use crate::{connections, events, http};
 
 
 async fn send_event(sender: &mpsc::Sender<events::ProxyEvents>, event: events::ProxyEvents) -> io::Result<()> {
@@ -57,6 +57,10 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
                                 break;
                             }
 
+                            Some(events::TuiEvents::SendRepeater { index, request }) => {
+                                send_repeater(sender, request, index).await;
+                            }
+
                             Some(events::TuiEvents::SetIntercept(value)) => {
                                 intercept = value;
                             }
@@ -67,6 +71,7 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
                                         "TUI channel closed",
                                 ));
                             }
+
                         }
                     }
 
@@ -84,7 +89,9 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
                         intercept = value;
                     }
 
-                    Some(events::TuiEvents::Forward(_)) => {}
+                    Some(events::TuiEvents::SendRepeater { index, request }) => {
+                        send_repeater(sender, request, index).await;
+                    }
 
                     None => {
                         return Err(io::Error::new(
@@ -92,8 +99,35 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
                                 "TUI channel closed",
                         ));
                     }
+
+                    _ => {}
                 }
             }
         }
     }
+}
+
+async fn send_repeater(sender: &mpsc::Sender<events::ProxyEvents>, request: http::Request, index: usize) {
+    let sender = sender.clone();
+
+    tokio::spawn(async move {
+        match connections::send_request(&request).await {
+            Ok(response) => {
+                let _ = sender.send(
+                    events::ProxyEvents::RepeaterResponse {
+                        index,
+                        response,
+                    }
+                ).await;
+            }
+
+            Err(error) => {
+                let _ = sender.send(
+                    events::ProxyEvents::Error(
+                        error.to_string()
+                    )
+                ).await;
+            }
+        }
+    });
 }

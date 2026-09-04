@@ -1,28 +1,22 @@
 use std::io;
 
 use crate::http;
-use crate::connections;
 use crate::editor;
 
 pub struct Repeater {
+    pub name: String,
     pub request: http::Request,
     pub response: Option<http::Response>,
 }
 
 impl Repeater {
-    pub fn new(request: http::Request) -> Self {
+    pub fn new(request: http::Request, name: String) -> Self {
         Self {
+            name,
             request,
             response: None,
         }
     }
-    pub async fn send(&mut self) -> io::Result<()> {
-        let response = connections::send_request(&self.request).await?;
-        self.response = Some(response);
-
-        Ok(())
-    }
-
     pub fn edit(&mut self) -> io::Result<()>{
         let edited_data = editor::edit(&self.request.to_str())?;
 

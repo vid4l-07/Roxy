@@ -1,6 +1,4 @@
-#![allow(unused)]
-use tokio::{ net::TcpListener, sync::mpsc};
-use std::io;
+use tokio::sync::mpsc;
 
 mod http;
 mod editor;

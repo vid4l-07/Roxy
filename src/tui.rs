@@ -3,14 +3,14 @@ use futures::StreamExt;
 use ratatui::{
     prelude::*,
     style::{Color, Style},
-    widgets::{Block, Paragraph, Tabs, Borders, BorderType, Padding},
-    layout::{Constraint, Direction, Layout},
+    widgets::{Clear, Block, Paragraph, Tabs, Borders, BorderType, Padding},
+    layout::{Constraint, Layout},
     Frame
 };
 use tokio::sync::mpsc;
 use std::io;
 
-use crate::{app::{Screen, App}, events, repeater, popups};
+use crate::{app::{Screen, App}, http, editor, events, repeater, popups};
 
 // Secondary
 
@@ -28,7 +28,7 @@ pub fn error_popup(app: &mut App, error: impl Into<String>){
 }
 
 // General
-pub async fn run(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut receiver: mpsc::Receiver<events::ProxyEvents>) -> io::Result<()> {
+pub async fn run(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, receiver: mpsc::Receiver<events::ProxyEvents>) -> io::Result<()> {
     let mut terminal = ratatui::init();
 
     let result = main_loop(app, sender, receiver, &mut terminal).await;
@@ -74,6 +74,12 @@ async fn main_loop(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut r
                         ));
                     }
 
+                    Some(events::ProxyEvents::RepeaterResponse { index, response }) => {
+                        if let Some(repeater) = app.repeaters.get_mut(index) {
+                            repeater.response = Some(response);
+                        }
+                    }
+
                     None => {
                         return Err(io::Error::new(
                                 io::ErrorKind::BrokenPipe,
@@ -115,7 +121,7 @@ async fn handle_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::Defau
     
     match app.screen {
         Screen::Proxy => handle_proxy_input(app, key, terminal, sender).await?,
-        Screen::Repeater => handle_repeater_input(app, key, terminal).await?,
+        Screen::Repeater => handle_repeater_input(app, key, terminal, sender).await?,
     }
     Ok(false)
 }
@@ -218,9 +224,9 @@ async fn handle_proxy_input(app: &mut App, key: KeyCode, terminal: &mut ratatui:
 
         KeyCode::Char('e') => {
             if let Some(request) = &app.intercepted_request {
-                match crate::editor::edit(&request.to_str()) {
+                match editor::edit(&request.to_str()) {
                     Ok(edited) => {
-                        app.intercepted_request = Some(crate::http::Request::from_edited(&edited, request.host.clone(), request.port));
+                        app.intercepted_request = Some(http::Request::from_edited(&edited, request.host.clone(), request.port));
                     }
 
                     Err(e) => {
@@ -234,10 +240,9 @@ async fn handle_proxy_input(app: &mut App, key: KeyCode, terminal: &mut ratatui:
 
         KeyCode::Char('r') => {
             if let Some(request) = &app.intercepted_request {
-                let repeater = crate::repeater::Repeater::new(request.clone());
+                let repeater = repeater::Repeater::new(request.clone(), (app.repeaters.len() + 1).to_string());
 
                 app.repeaters.push(repeater);
-                app.repeaters_names.push(app.repeaters.len().to_string());
                 app.selected_repeater = app.repeaters.len() - 1;
                 app.screen = Screen::Repeater;
             }
@@ -278,10 +283,11 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     ]).split(vertical[1]);
 
 
-    let tabs = Tabs::new(app.repeaters_names.iter().map(|title| Line::from(title.clone())).collect::<Vec<_>>())
+    let tabs = Tabs::new(app.repeaters.iter().map(|repeater| Line::from(repeater.name.clone())).collect::<Vec<_>>())
         .block(
             Block::bordered().border_type(BorderType::Rounded).title(" Repeaters "),
         ).select(app.selected_repeater);
+    frame.render_widget(Clear, vertical[0]);
     frame.render_widget(tabs, vertical[0]);
 
 
@@ -315,7 +321,7 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     frame.render_widget(response_info, horizontal[1]);
 
     let help = Paragraph::new(
-        "[↑↓] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Previous"
+        "[↑↓] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Previous  [x] Close"
     )
         .alignment(Alignment::Right)
         .block(
@@ -328,13 +334,18 @@ fn render_repeater(frame: &mut Frame, app: &App) {
 
 }
 
-async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
+async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::DefaultTerminal, sender: &mpsc::Sender<events::TuiEvents>) -> io::Result<()> {
     match key {
         KeyCode::Enter => {
-            if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
-                if let Err(e) = repeater.send().await {
-                    error_popup(app, e.to_string());
-                }
+            if let Some(repeater) = app.repeaters.get(app.selected_repeater) {
+                sender.send(
+                    events::TuiEvents::SendRepeater{
+                        index: app.selected_repeater,
+                        request: repeater.request.clone()
+                    }
+                ).await.map_err(|_| 
+                    io::Error::new(io::ErrorKind::BrokenPipe, "TUI channel closed")
+                )?;
             }
         }
 
@@ -352,6 +363,12 @@ async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratat
             }
         }
 
+        KeyCode::Char('x') => {
+            if app.repeaters.get(app.selected_repeater).is_some() {
+                app.repeaters.remove(app.selected_repeater);
+                app.selected_repeater = app.selected_repeater.saturating_sub(1);
+            }
+        }
 
         KeyCode::Char('n') => {
             if !app.repeaters.is_empty() {
