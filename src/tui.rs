@@ -166,7 +166,6 @@ fn render_proxy(frame: &mut Frame, app: &App) {
 
     frame.render_widget(paragraph, vertical[0]);
 
-    let request_scroll: u16 = 0;
     let mut block = Block::bordered()
         .border_type(BorderType::Rounded)
         .title(" Request ");
@@ -184,7 +183,7 @@ fn render_proxy(frame: &mut Frame, app: &App) {
 
     let request_info = Paragraph::new(request)
         .block(block)
-        .scroll((request_scroll, 0));
+        .scroll((app.proxy_scroll, 0));
     frame.render_widget(request_info, vertical[1]);
 
     let help = Paragraph::new(
@@ -252,6 +251,14 @@ async fn handle_proxy_input(app: &mut App, key: KeyCode, terminal: &mut ratatui:
             app.screen = Screen::Repeater;
         }
 
+        KeyCode::Down | KeyCode::Char('j') => {
+            scroll_down(&mut app.proxy_scroll);
+        }
+
+        KeyCode::Up | KeyCode::Char('k') => {
+            scroll_up(&mut app.proxy_scroll);
+        }
+
         _ => {}
     }
 
@@ -278,25 +285,60 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     ]).split(frame.area());
 
     let horizontal = Layout::horizontal([
-        Constraint::Percentage(50),
-        Constraint::Percentage(50),
+        Constraint::Percentage(app.request_size),
+        Constraint::Percentage(100 - app.request_size),
     ]).split(vertical[1]);
 
 
-    let tabs = Tabs::new(app.repeaters.iter().map(|repeater| Line::from(repeater.name.clone())).collect::<Vec<_>>())
+    let mut tab_width = 4;
+    if !app.repeaters.is_empty(){
+        tab_width = app.repeaters.iter().map(|repeater| repeater.name.len() + 4).sum::<usize>() / app.repeaters.len();
+    }
+    let available_width = vertical[0].width as usize;
+    let max_tabs = (available_width / tab_width).max(1);
+    
+    let start = if app.selected_repeater >= max_tabs {
+        app.selected_repeater - max_tabs + 1
+    } else {
+        0
+    };
+
+    let tabs = Tabs::new(
+        app.repeaters[start..].iter().map(|repeater| Line::from(repeater.name.clone()))
+        .collect::<Vec<_>>()
+    )
         .block(
-            Block::bordered().border_type(BorderType::Rounded).title(" Repeaters "),
-        ).select(app.selected_repeater);
+            Block::bordered()
+            .border_type(BorderType::Rounded)
+            .title(" Repeaters "),
+        )
+        .select(app.selected_repeater - start);
     frame.render_widget(Clear, vertical[0]);
     frame.render_widget(tabs, vertical[0]);
 
 
-    let request_scroll: u16 = 0;
+    let mut request_border_color = Color::Reset;
+    let mut response_border_color = Color::Reset;
+
+    match app.repeater_focus {
+        repeater::RepeaterFocus::Request => {
+            request_border_color = Color::Blue;
+        }
+        repeater::RepeaterFocus::Response => {
+            response_border_color = Color::Blue;
+        }
+    }
+
     let mut block = Block::bordered()
-    .border_type(BorderType::Rounded)
+    .border_type(BorderType::Rounded).border_style(Style::default().fg(request_border_color))
     .title(" Request ");
 
+    let mut request_scroll = 0;
+    let mut response_scroll = 0;
+
     if let Some(repeater) = &app.repeaters.get(app.selected_repeater) {
+        request_scroll = repeater.request_scroll;
+        response_scroll = repeater.response_scroll;
         if !repeater.request.host.is_empty() {
             block = block.title_bottom(
                 Line::styled(
@@ -314,9 +356,10 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     frame.render_widget(request_info, horizontal[0]);
 
 
-    let response_scroll: u16 = 0;
     let response_info = Paragraph::new(response).block(
-        Block::bordered().border_type(BorderType::Rounded).title(" Response ")
+        Block::bordered().border_type(BorderType::Rounded)
+        .border_type(BorderType::Rounded).border_style(Style::default().fg(response_border_color))
+        .title(" Response ")
     ).scroll((response_scroll, 0));
     frame.render_widget(response_info, horizontal[1]);
 
@@ -382,6 +425,52 @@ async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratat
             }
         }
 
+        KeyCode::Down | KeyCode::Char('j') => {
+            if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
+                match app.repeater_focus {
+                    repeater::RepeaterFocus::Request => {
+                        scroll_down(&mut repeater.request_scroll);
+                    }
+
+                    repeater::RepeaterFocus::Response => {
+                        scroll_down(&mut repeater.response_scroll);
+                    }
+                }
+            }
+        }
+
+        KeyCode::Up | KeyCode::Char('k') => {
+            if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
+                match app.repeater_focus {
+                    repeater::RepeaterFocus::Request => {
+                        scroll_up(&mut repeater.request_scroll);
+                    }
+
+                    repeater::RepeaterFocus::Response => {
+                        scroll_up(&mut repeater.response_scroll);
+                    }
+                }
+            }
+        }
+
+        KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l') => {
+            match app.repeater_focus {
+                repeater::RepeaterFocus::Request => {
+                    app.repeater_focus = repeater::RepeaterFocus::Response;
+                }
+                repeater::RepeaterFocus::Response => {
+                    app.repeater_focus = repeater::RepeaterFocus::Request;
+                }
+            }
+        }
+
+        KeyCode::Char('H') => {
+            app.request_size = (app.request_size - 10).clamp(20,80);
+        }
+        KeyCode::Char('L') => {
+            app.request_size = (app.request_size + 10).clamp(20,80);
+        }
+
         KeyCode::Tab => {
             app.screen = Screen::Proxy;
         }
@@ -392,3 +481,10 @@ async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratat
     Ok(())
 }
 
+fn scroll_down(scroll: &mut u16) {
+    *scroll = scroll.saturating_add(2);
+}
+
+fn scroll_up(scroll: &mut u16) {
+    *scroll = scroll.saturating_sub(2);
+}
