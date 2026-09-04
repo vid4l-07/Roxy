@@ -18,7 +18,7 @@ async fn send_event(sender: &mpsc::Sender<events::ProxyEvents>, event: events::P
 }
 
 pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mpsc::Receiver<events::TuiEvents>) -> io::Result<()>{
-    let listener = TcpListener::bind("127.0.0.1:8888").await?;
+    let listener = TcpListener::bind("127.0.0.1:8080").await?;
 
     let mut intercept = false;
 
