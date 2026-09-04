@@ -1,6 +1,5 @@
 use crossterm::event::{Event, EventStream, KeyCode};
 use futures::StreamExt;
-
 use ratatui::{
     prelude::*,
     style::{Color, Style},
@@ -8,9 +7,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     Frame
 };
-
 use tokio::sync::mpsc;
-
 use std::io;
 
 use crate::{app::{Screen, App}, events, repeater, popups};
@@ -164,16 +161,35 @@ fn render_proxy(frame: &mut Frame, app: &App) {
     frame.render_widget(paragraph, vertical[0]);
 
     let request_scroll: u16 = 0;
-    let request_info = Paragraph::new(request).block(
-        Block::bordered().border_type(BorderType::Rounded).title(Line::from(vec![
-        Span::raw(" Request "),
-        ]))).scroll((request_scroll, 0));
+    let mut block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .title(" Request ");
 
+    if let Some(request) = &app.intercepted_request {
+        if !request.host.is_empty() {
+            block = block.title_bottom(
+                Line::styled(
+                    format!(" Host: {}:{} ", request.host, request.port),
+                    Style::default().fg(Color::Yellow),
+                )
+            );
+        }
+    }
+
+    let request_info = Paragraph::new(request)
+        .block(block)
+        .scroll((request_scroll, 0));
     frame.render_widget(request_info, vertical[1]);
 
     let help = Paragraph::new(
-        "[↑↓] Scroll  [Tab] Switch  [e] Edit  [Enter] Send  [q] Quit"
-    ).style(Style::default().fg(Color::Black));
+        "[↑↓] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [r] Send to Repeter",
+    )
+        .alignment(Alignment::Right)
+        .block(
+            Block::default()
+            .padding(Padding::new(0, 2, 0, 0)),
+        )
+        .style(Style::default().fg(Color::Black));
 
     frame.render_widget(help, vertical[2]);
 
@@ -201,20 +217,15 @@ async fn handle_proxy_input(app: &mut App, key: KeyCode, terminal: &mut ratatui:
         }
 
         KeyCode::Char('e') => {
-            let request = app.intercepted_request
-                .as_ref()
-                .map(|request| request.to_str())
-                .unwrap_or_default();
+            if let Some(request) = &app.intercepted_request {
+                match crate::editor::edit(&request.to_str()) {
+                    Ok(edited) => {
+                        app.intercepted_request = Some(crate::http::Request::from_edited(&edited, request.host.clone(), request.port));
+                    }
 
-            match crate::editor::edit(&request) {
-                Ok(edited) => {
-                    app.intercepted_request = Some(crate::http::Request {
-                        raw: edited.into_bytes(),
-                    });
-                }
-
-                Err(e) => {
-                    error_popup(app, e.to_string());
+                    Err(e) => {
+                        error_popup(app, e.to_string());
+                    }
                 }
             }
 
@@ -275,9 +286,23 @@ fn render_repeater(frame: &mut Frame, app: &App) {
 
 
     let request_scroll: u16 = 0;
-    let request_info = Paragraph::new(request).block(
-        Block::bordered().border_type(BorderType::Rounded).title(" Request ")
-    ).scroll((request_scroll, 0));
+    let mut block = Block::bordered()
+    .border_type(BorderType::Rounded)
+    .title(" Request ");
+
+    if let Some(repeater) = &app.repeaters.get(app.selected_repeater) {
+        if !repeater.request.host.is_empty() {
+            block = block.title_bottom(format!(
+                    " Host: {}:{} ",
+                    repeater.request.host,
+                    repeater.request.port
+            ));
+        }
+    }
+
+    let request_info = Paragraph::new(request)
+        .block(block)
+        .scroll((request_scroll, 0));
     frame.render_widget(request_info, horizontal[0]);
 
 
@@ -287,10 +312,16 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     ).scroll((response_scroll, 0));
     frame.render_widget(response_info, horizontal[1]);
 
-
     let help = Paragraph::new(
-        "[↑↓] Scroll  [Tab] Switch  [e] Edit  [Enter] Send  [q] Quit"
-    ).style(Style::default().fg(Color::Black));
+        "[↑↓] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Previous"
+    )
+        .alignment(Alignment::Right)
+        .block(
+            Block::default()
+            .padding(Padding::new(0, 2, 0, 0)),
+        )
+        .style(Style::default().fg(Color::Black));
+
     frame.render_widget(help, vertical[2]);
 
 }

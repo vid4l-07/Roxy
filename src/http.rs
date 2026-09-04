@@ -1,67 +1,232 @@
 use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt};
 use std::io;
+use url::Url;
 
 
+// Request
 #[derive(Clone)]
 pub struct Request {
-    pub raw: Vec<u8>,
+    pub method: String,
+    pub target: String,
+    pub version: u8,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+
+    pub host: String,
+    pub port: u16,
 }
 
 impl Request {
-    pub fn to_str(&self) -> String {
-        String::from_utf8_lossy(&self.raw).to_string()
-    }
-
-    fn find_header(&self, header: &str) -> Option<String> {
-        let mut headers = [httparse::EMPTY_HEADER; 64];
-        let mut request = httparse::Request::new(&mut headers);
-        match request.parse(&self.raw) {
-            Ok(httparse::Status::Complete(_)) => {
-                for i in request.headers {
-                    if i.name.eq_ignore_ascii_case(header) {
-                        return Some(
-                            String::from_utf8_lossy(i.value)
-                            .trim()
-                            .to_string(),
-                        );
-                    }
-                }
-
-                None
-            }
-
-            _ => None,
-        }
-
-    }
-
-    pub fn host(&self) -> Option<String> {
-        self.find_header("Host")
-    }
-
-    pub fn method(&self) -> Option<String> {
+    
+    // Constructor
+    pub fn from_bytes(data: &[u8]) -> io::Result<Self> {
         let mut headers = [httparse::EMPTY_HEADER; 64];
         let mut request = httparse::Request::new(&mut headers);
 
-        match request.parse(&self.raw) {
-            Ok(httparse::Status::Complete(_)) => {
-                request.method.map(|method| method.to_string())
+        let header_size = match request.parse(data).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid HTTP request: {e}"),
+            )
+        })? {
+            httparse::Status::Complete(size) => size,
+
+            httparse::Status::Partial => {
+                return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Incomplete HTTP request",
+                ));
             }
-            _ => None,
+        };
+
+        let method = request.method.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Missing HTTP method",
+                )
+            })?
+        .to_string();
+
+        let target = request.path.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Missing request target",
+                )
+            })?
+        .to_string();
+
+        let version = request.version.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Missing HTTP version",
+                )
+            })?;
+
+        let mut request_headers = Vec::new();
+
+        for header in request.headers {
+            let name = header.name.to_string();
+
+            let value = String::from_utf8_lossy(header.value)
+                .trim()
+                .to_string();
+
+            request_headers.push((name, value));
+        }
+
+        let body = data[header_size..].to_vec();
+
+        let (target, host, port) = Self::normalize_target(&target, &request_headers)?;
+
+        Ok(Self {
+            method,
+            target,
+            version,
+            headers: request_headers,
+            body,
+            host,
+            port,
+        })
+    }
+
+    fn normalize_target(target: &str, headers: &[(String, String)]) -> io::Result<(String, String, u16)> {
+        if target.starts_with("http://") {
+            let url = Url::parse(target).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Invalid URL: {e}"),
+                )
+            })?;
+
+            let host = url.host_str().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "URL has no host",
+                )
+            })?;
+
+            let port = url.port().unwrap_or(80);
+
+            let mut target = url.path().to_string();
+
+            if target.is_empty() {
+                target.push('/');
+            }
+
+            if let Some(query) = url.query() {
+                target.push('?');
+                target.push_str(query);
+            }
+
+            return Ok((
+                target,
+                host.to_string(),
+                port,
+            ));
+        }
+
+        let (host, port) = Self::parse_host(headers)?;
+
+        Ok((
+            target.to_string(),
+            host,
+            port,
+        ))
+    }
+
+    fn parse_host(headers: &[(String, String)]) -> io::Result<(String, u16)> {
+        let host = headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("Host"))
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Missing Host header",
+                )
+            })?;
+
+        if let Some((host, port)) = host.1.rsplit_once(':') {
+            let port = port.parse::<u16>().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid port",
+                )
+            })?;
+
+            return Ok((host.to_string(), port));
+        }
+
+        Ok((host.1.clone(), 80))
+    }
+
+    pub fn from_edited(data: &str, host: String, port: u16) -> Self {
+        let mut lines = data.split("\r\n");
+
+        let request_line = lines.next().unwrap_or("");
+
+        let mut parts = request_line.splitn(3, ' ');
+
+        let method = parts.next().unwrap_or("").to_string();
+        let target = parts.next().unwrap_or("").to_string();
+        let version = parts
+            .next()
+            .and_then(|version| version.strip_prefix("HTTP/1."))
+            .and_then(|version| version.parse::<u8>().ok())
+            .unwrap_or(1);
+
+        let mut headers = Vec::new();
+
+        for line in lines {
+            if line.is_empty() {
+                break;
+            }
+
+            if let Some((name, value)) = line.split_once(':') {
+                headers.push((
+                    name.trim().to_string(),
+                    value.trim().to_string(),
+                ));
+            }
+        }
+
+        Self {
+            method,
+            target,
+            version,
+            headers,
+            body: Vec::new(),
+            host,
+            port,
         }
     }
 
-}
 
-pub struct Response {
-    pub raw: Vec<u8>,
-}
+    // Transformations
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut request = format!(
+            "{} {} HTTP/1.{}\r\n",
+            self.method,
+            self.target,
+            self.version
+        );
 
-impl Response {
-    pub fn to_str(&self) -> String {
-        String::from_utf8_lossy(&self.raw).to_string()
+        for (name, value) in &self.headers {
+            request.push_str(&format!("{}: {}\r\n", name, value));
+        }
+
+        request.push_str("\r\n");
+
+        let mut bytes = request.into_bytes();
+        bytes.extend_from_slice(&self.body);
+
+        bytes
     }
+
+    pub fn to_str(&self) -> String {
+        String::from_utf8_lossy(&self.to_bytes()).to_string()
+    }
+
 }
 
 pub async fn read_request(socket: &mut TcpStream) -> io::Result<Request> {
@@ -109,9 +274,20 @@ pub async fn read_request(socket: &mut TcpStream) -> io::Result<Request> {
                 }
             }
         }
-        Ok(Request { raw: vec })
+        Request::from_bytes(&vec)
 }
 
+
+// Response
+pub struct Response {
+    pub raw: Vec<u8>,
+}
+
+impl Response {
+    pub fn to_str(&self) -> String {
+        String::from_utf8_lossy(&self.raw).to_string()
+    }
+}
 
 pub async fn read_response(socket: &mut TcpStream) -> io::Result<Response> {
         let mut buff = [0u8; 4096];

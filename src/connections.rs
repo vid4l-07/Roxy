@@ -5,13 +5,7 @@ use std::io;
 use crate::http;
 
 async fn connect_to_server(request: &http::Request) -> io::Result<TcpStream> {
-    let host = request.host().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing Host header"))?;
-
-    let address = if host.contains(':') {
-        host
-    } else {
-        format!("{}:80", host)
-    };
+    let address = format!("{}:{}", &request.host, &request.port);
 
     TcpStream::connect(address).await
 }
@@ -25,7 +19,7 @@ pub async fn get_request(client: &mut TcpStream) -> io::Result<http::Request> {
 pub async fn send_request(request: &http::Request) -> io::Result<http::Response> {
     let mut server = connect_to_server(&request).await?;
 
-    server.write_all(&request.raw).await?;
+    server.write_all(&request.to_bytes()).await?;
 
     http::read_response(&mut server).await
 }
@@ -43,7 +37,7 @@ pub async fn forward(client: &mut TcpStream, request: &http::Request) -> io::Res
 // HTTPS
 
 async fn handle_https(client: &mut TcpStream, request: &http::Request) -> io::Result<()> {
-    let host = request.host().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Missing Host header"))?;
+    let host = &request.host;
 
     let mut server = TcpStream::connect(&host).await?;
 

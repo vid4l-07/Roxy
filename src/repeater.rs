@@ -1,6 +1,5 @@
 use std::io;
 
-
 use crate::http;
 use crate::connections;
 use crate::editor;
@@ -27,7 +26,7 @@ impl Repeater {
     pub fn edit(&mut self) -> io::Result<()>{
         let edited_data = editor::edit(&self.request.to_str())?;
 
-        self.request.raw = edited_data.into_bytes();
+        self.request = http::Request::from_edited(&edited_data, self.request.host.clone(), self.request.port);
 
         Ok(())
     }
