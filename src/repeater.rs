@@ -14,7 +14,9 @@ pub struct Repeater {
     pub response: Option<http::Response>,
 
     pub request_scroll: u16,
-    pub response_scroll: u16
+    pub response_scroll: u16,
+    
+    pub thinking: bool,
 }
 
 impl Repeater {
@@ -24,7 +26,8 @@ impl Repeater {
             request,
             response: None,
             request_scroll: 0,
-            response_scroll: 0
+            response_scroll: 0,
+            thinking: false,
         }
     }
     pub fn edit(&mut self) -> io::Result<()>{

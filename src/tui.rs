@@ -77,6 +77,7 @@ async fn main_loop(app: &mut App, sender: mpsc::Sender<events::TuiEvents>, mut r
                     Some(events::ProxyEvents::RepeaterResponse { index, response }) => {
                         if let Some(repeater) = app.repeaters.get_mut(index) {
                             repeater.response = Some(response);
+                            repeater.thinking = false;
                         }
                     }
 
@@ -333,6 +334,19 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     .border_type(BorderType::Rounded).border_style(Style::default().fg(request_border_color))
     .title(" Request ");
 
+    if let Some(repeater) = app.repeaters.get(app.selected_repeater) {
+        if repeater.thinking{
+            block = Block::bordered()
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(request_border_color))
+                .title(" Request ")
+                .title(
+                    Line::from(" Sending... ")
+                    .alignment(Alignment::Right)
+                );
+        }
+    }
+
     let mut request_scroll = 0;
     let mut response_scroll = 0;
 
@@ -380,7 +394,7 @@ fn render_repeater(frame: &mut Frame, app: &App) {
 async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::DefaultTerminal, sender: &mpsc::Sender<events::TuiEvents>) -> io::Result<()> {
     match key {
         KeyCode::Enter => {
-            if let Some(repeater) = app.repeaters.get(app.selected_repeater) {
+            if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
                 sender.send(
                     events::TuiEvents::SendRepeater{
                         index: app.selected_repeater,
@@ -389,6 +403,7 @@ async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratat
                 ).await.map_err(|_| 
                     io::Error::new(io::ErrorKind::BrokenPipe, "TUI channel closed")
                 )?;
+                repeater.thinking = true;
             }
         }
 
