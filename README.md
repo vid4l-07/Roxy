@@ -59,6 +59,7 @@ Configure your browser or HTTP client to use `127.0.0.1:8080` as a proxy.
 | --- | --- |
 | `Enter` | Send the current request |
 | `e` | Edit request in external editor |
+| `r` | Rename current tab |
 | `n` | Next repeater tab |
 | `p` | Previous repeater tab |
 | `x` | Close current tab |
