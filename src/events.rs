@@ -1,7 +1,10 @@
 use crate::http;
 
 pub enum TuiEvents {
-    Forward(http::Request),
+    Forward{
+        id: usize,
+        request: http::Request
+    },
     SetIntercept(bool),
     SendRepeater { 
         index: usize ,
@@ -10,7 +13,10 @@ pub enum TuiEvents {
 }
 
 pub enum ProxyEvents {
-    ReceivedRequest(http::Request),
+    ReceivedRequest {
+        id: usize,
+        request: http::Request,
+    },
     Error(String),
     FatalError(String),
     RepeaterResponse {

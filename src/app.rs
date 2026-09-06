@@ -1,4 +1,3 @@
-
 use crate::{http, repeater, popups};
 
 pub enum Screen {
@@ -6,11 +5,16 @@ pub enum Screen {
     Repeater
 }
 
+pub struct InterceptedRequest {
+    pub id: usize,
+    pub request: http::Request
+}
+
 pub struct App {
     pub screen: Screen,
     pub proxy_scroll: u16,
 
-    pub intercepted_request: Option<http::Request>,
+    pub request_queue: Vec<InterceptedRequest>,
     pub intercept: bool,
 
     pub repeaters: Vec<repeater::Repeater>,
@@ -29,7 +33,7 @@ impl App {
             screen: Screen::Proxy,
             proxy_scroll: 0,
 
-            intercepted_request: None,
+            request_queue: Vec::new(),
             intercept: false,
 
             repeaters: Vec::new(),
