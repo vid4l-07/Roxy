@@ -73,6 +73,21 @@ impl Request {
 
         let body = data[header_size..].to_vec();
 
+        if method.eq_ignore_ascii_case("CONNECT") {
+            let (host, port) = Self::parse_connect_target(&target)?;
+
+            return Ok(Self {
+                method,
+                target,
+                version,
+                headers: request_headers,
+                body,
+                host,
+                port,
+            });
+        }
+
+
         let (target, host, port) = Self::normalize_target(&target, &request_headers)?;
 
         Ok(Self {
@@ -86,6 +101,7 @@ impl Request {
         })
     }
 
+    // parsers
     fn normalize_target(target: &str, headers: &[(String, String)]) -> io::Result<(String, String, u16)> {
         if target.starts_with("http://") {
             let url = Url::parse(target).map_err(|e| {
@@ -152,6 +168,26 @@ impl Request {
 
         Ok((host.1.clone(), 80))
     }
+
+    fn parse_connect_target(target: &str) -> io::Result<(String, u16)> {
+        let (host, port) = target.rsplit_once(':')
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Invalid CONNECT target",
+                )
+            })?;
+
+        let port = port.parse::<u16>().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid CONNECT port",
+            )
+        })?;
+
+        Ok((host.to_string(), port))
+    }
+
 
     pub fn from_edited(data: &str, host: String, port: u16) -> Self {
         let (headers_part, body) = data

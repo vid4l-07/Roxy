@@ -45,6 +45,17 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
                     }
                 };
 
+                if request.method.eq_ignore_ascii_case("CONNECT") {
+                    if let Err(e) = connections::handle_https(&mut client, &request).await {
+                        send_event(
+                            &sender,
+                            events::ProxyEvents::Error(e.to_string())
+                        ).await?;
+                    }
+
+                    continue;
+                }
+                
                 if intercept {
                     send_event(&sender, events::ProxyEvents::ReceivedRequest(request.clone())).await?;
 
