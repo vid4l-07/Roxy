@@ -188,7 +188,7 @@ fn render_proxy(frame: &mut Frame, app: &App) {
     frame.render_widget(request_info, vertical[1]);
 
     let help = Paragraph::new(
-        "[↑↓] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [i] Toggle Intercept  [e] Edit  [r] Send to Repeter",
+        "[↑↓/jk] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [i] Intercept  [e] Edit  [r] Repeater",
     )
         .alignment(Alignment::Right)
         .block(
@@ -378,7 +378,7 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     frame.render_widget(response_info, horizontal[1]);
 
     let help = Paragraph::new(
-        "[↑↓] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Previous  [x] Close"
+        "[↑↓/jk] Scroll  [←→/hl] Focus  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Prev  [x] Close  [H/L] Resize"
     )
         .alignment(Alignment::Right)
         .block(
