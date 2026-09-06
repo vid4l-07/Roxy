@@ -34,4 +34,19 @@ pub async fn forward(client: &mut TcpStream, request: &http::Request) -> io::Res
     Ok(response)
 }
 
+// HTTPS
+
+pub async fn handle_https(client: &mut TcpStream, request: &http::Request) -> io::Result<()> {
+    let host = format!("{}:{}", request.host, request.port);
+
+    let mut server = TcpStream::connect(&host).await?;
+
+    client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
+
+    tokio::io::copy_bidirectional(client, &mut server).await?;
+
+    Ok(())
+}
+
+
 
