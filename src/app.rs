@@ -18,6 +18,8 @@ pub struct App {
     pub repeater_focus: repeater::RepeaterFocus,
     pub request_size: u16,
 
+    pub renaming_repeater: Option<usize>,
+
     pub popups: Vec<popups::Popup>,
 }
 
@@ -34,6 +36,8 @@ impl App {
             selected_repeater: 0,
             repeater_focus: repeater::RepeaterFocus::Request,
             request_size: 50,
+
+            renaming_repeater: None,
 
             popups: Vec::new(),
         }

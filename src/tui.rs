@@ -105,13 +105,24 @@ fn render(frame: &mut Frame, app: &App) {
 }
 
 async fn handle_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::DefaultTerminal, sender: &mpsc::Sender<events::TuiEvents>) -> io::Result<bool>{
-    if key == KeyCode::Char('q') {
-        return Ok(true);
-    }
-
-    if let Some(popup) = app.popups.last() {
+    if let Some(popup) = app.popups.last_mut() {
         match popup.handle_input(key) {
             popups::PopupAction::Close => {
+                app.popups.pop();
+            }
+
+            popups::PopupAction::Input(name) => {
+                let name = name.trim();
+
+                if !name.is_empty() {
+                    if let Some(index) = app.renaming_repeater {
+                        if let Some(repeater) = app.repeaters.get_mut(index) {
+                            repeater.name = name.to_owned();
+                        }
+                    }
+                }
+
+                app.renaming_repeater = None;
                 app.popups.pop();
             }
             popups::PopupAction::None => {}
@@ -119,11 +130,16 @@ async fn handle_input(app: &mut App, key: KeyCode, terminal: &mut ratatui::Defau
 
         return Ok(false);
     }
-    
+
     match app.screen {
         Screen::Proxy => handle_proxy_input(app, key, terminal, sender).await?,
         Screen::Repeater => handle_repeater_input(app, key, terminal, sender).await?,
     }
+
+    if key == KeyCode::Char('q') {
+        return Ok(true);
+    }
+    
     Ok(false)
 }
 
@@ -378,7 +394,7 @@ fn render_repeater(frame: &mut Frame, app: &App) {
     frame.render_widget(response_info, horizontal[1]);
 
     let help = Paragraph::new(
-        "[↑↓/jk] Scroll  [←→/hl] Focus  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Prev  [x] Close  [H/L] Resize"
+        "[↑↓/jk] Scroll  [←→/hl] Focus  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Prev  [r] Rename  [x] Close  [H/L] Resize"
     )
         .alignment(Alignment::Right)
         .block(
@@ -437,6 +453,22 @@ async fn handle_repeater_input(app: &mut App, key: KeyCode, terminal: &mut ratat
         KeyCode::Char('p') => {
             if !app.repeaters.is_empty() {
                 app.selected_repeater = (app.selected_repeater + app.repeaters.len() - 1) % app.repeaters.len();
+            }
+        }
+
+        KeyCode::Char('r') => {
+            if let Some(_) = app.repeaters.get(app.selected_repeater) {
+                app.renaming_repeater = Some(app.selected_repeater);
+
+                app.popups.push(popups::Popup::Input(
+                        popups::InputPopup {
+                            input: String::new(),
+                            title: " Rename ".to_owned(),
+                            color: Color::Reset,
+                        }
+                    )
+                );
+
             }
         }
 
