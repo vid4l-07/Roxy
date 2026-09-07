@@ -1,11 +1,11 @@
 use crossterm::event::{Event, EventStream, KeyCode};
 use futures::StreamExt;
 use ratatui::{
-    prelude::*,
-    style::{Color, Style},
-    widgets::{Clear, Block, Paragraph, Tabs, Borders, BorderType, Padding},
+    Frame, 
     layout::{Constraint, Layout},
-    Frame
+    prelude::*, 
+    style::{Color, Style},
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Tabs, Wrap}
 };
 use tokio::sync::mpsc;
 use std::io;
@@ -198,7 +198,7 @@ fn render_proxy(frame: &mut Frame, app: &app::App) {
         }
     }
 
-    let request_info = Paragraph::new(request)
+    let request_info = Paragraph::new(request).wrap(Wrap { trim: false })
         .block(block)
         .scroll((app.proxy_scroll, 0));
     frame.render_widget(request_info, vertical[1]);
@@ -382,13 +382,13 @@ fn render_repeater(frame: &mut Frame, app: &app::App) {
         }
     }
 
-    let request_info = Paragraph::new(request)
+    let request_info = Paragraph::new(request).wrap(Wrap { trim: false })
         .block(block)
         .scroll((request_scroll, 0));
     frame.render_widget(request_info, horizontal[0]);
 
 
-    let response_info = Paragraph::new(response).block(
+    let response_info = Paragraph::new(response).wrap(Wrap { trim: false }).block(
         Block::bordered().border_type(BorderType::Rounded)
         .border_type(BorderType::Rounded).border_style(Style::default().fg(response_border_color))
         .title(" Response ")
