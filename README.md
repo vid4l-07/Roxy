@@ -4,6 +4,11 @@
 
 Minimal terminal-based HTTP intercepting proxy.
 
+
+https://github.com/user-attachments/assets/94f9c9ae-5842-4b19-9f5b-84dedb9430e6
+
+
+
 </div>
 
 ## Overview
