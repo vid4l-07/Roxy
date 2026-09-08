@@ -1,4 +1,4 @@
-use crate::{http, repeater, popups};
+use crate::{http, repeater, tui::popups};
 
 pub enum Screen {
     Proxy,

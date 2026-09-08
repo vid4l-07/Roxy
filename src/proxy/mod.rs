@@ -7,7 +7,9 @@ use std::collections::HashMap;
 
 use std::io;
 
-use crate::{connections, events, http};
+use crate::{events, http};
+
+mod connections;
 
 
 async fn send_event(sender: &mpsc::Sender<events::ProxyEvents>, event: events::ProxyEvents) -> io::Result<()> {

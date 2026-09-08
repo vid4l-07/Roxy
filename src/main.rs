@@ -2,13 +2,11 @@ use tokio::sync::mpsc;
 
 mod http;
 mod editor;
-mod connections;
 mod repeater;
 mod app;
 mod tui;
 mod proxy;
 mod events;
-mod popups;
 
 fn wellcome_screen() {
     print!("

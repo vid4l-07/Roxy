@@ -48,5 +48,3 @@ pub async fn handle_https(client: &mut TcpStream, request: &http::Request) -> io
     Ok(())
 }
 
-
-
