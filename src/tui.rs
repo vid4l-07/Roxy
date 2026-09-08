@@ -211,7 +211,7 @@ fn render_proxy(frame: &mut Frame, app: &app::App) {
             Block::default()
             .padding(Padding::new(0, 2, 0, 0)),
         )
-        .style(Style::default().fg(Color::Black));
+        .style(Style::default().fg(Color::DarkGray));
 
     frame.render_widget(help, vertical[2]);
 
@@ -403,7 +403,7 @@ fn render_repeater(frame: &mut Frame, app: &app::App) {
             Block::default()
             .padding(Padding::new(0, 2, 0, 0)),
         )
-        .style(Style::default().fg(Color::Black));
+        .style(Style::default().fg(Color::DarkGray));
 
     frame.render_widget(help, vertical[2]);
 
