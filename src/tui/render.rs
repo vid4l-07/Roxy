@@ -81,6 +81,35 @@ pub(super) fn render_proxy(frame: &mut Frame, app: &app::App) {
 }
 
 pub(super) fn render_repeater(frame: &mut Frame, app: &app::App) {
+    let repeater = match app.repeaters.get(app.selected_repeater) {
+        Some(repeater) => repeater,
+        None => return,
+    };
+    match app.repeater_view {
+        app::RepeaterView::Split =>{
+            render_split_repeater(frame, app) }
+
+        app::RepeaterView::ZoomedRequest => {
+            render_zoomed(
+                frame,
+                repeater.request.to_str(),
+                repeater.request_scroll,
+            )
+        }
+
+        app::RepeaterView::ZoomedResponse => {
+            render_zoomed(
+                frame,
+                repeater.response.as_ref()
+                .map(|r| r.to_str())
+                .unwrap_or_default(),
+                repeater.response_scroll,
+            )
+        }
+    }
+}
+
+fn render_split_repeater(frame: &mut Frame, app: &app::App) {
     let (request, response) = match app.repeaters.get(app.selected_repeater) {
         Some(repeater) => {
             let request = repeater.request.to_str();
@@ -110,7 +139,7 @@ pub(super) fn render_repeater(frame: &mut Frame, app: &app::App) {
     }
     let available_width = vertical[0].width as usize;
     let max_tabs = (available_width / tab_width).max(1);
-    
+
     let start = if app.selected_repeater >= max_tabs {
         app.selected_repeater - max_tabs + 1
     } else {
@@ -144,8 +173,8 @@ pub(super) fn render_repeater(frame: &mut Frame, app: &app::App) {
     }
 
     let mut block = Block::bordered()
-    .border_type(BorderType::Rounded).border_style(Style::default().fg(request_border_color))
-    .title(" Request ");
+        .border_type(BorderType::Rounded).border_style(Style::default().fg(request_border_color))
+        .title(" Request ");
 
     if let Some(repeater) = app.repeaters.get(app.selected_repeater) {
         if repeater.thinking{
@@ -202,4 +231,12 @@ pub(super) fn render_repeater(frame: &mut Frame, app: &app::App) {
 
     frame.render_widget(help, vertical[2]);
 
+}
+
+fn render_zoomed(frame: &mut Frame, text: String, scroll: u16) {
+    let render_text = Paragraph::new(text)
+        .wrap(Wrap { trim: false })
+        .scroll((scroll, 0));
+
+    frame.render_widget(render_text, frame.area());
 }

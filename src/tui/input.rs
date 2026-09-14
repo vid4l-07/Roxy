@@ -234,6 +234,24 @@ async fn handle_repeater_input(app: &mut app::App, key: KeyCode, terminal: &mut 
         KeyCode::Char('L') => {
             app.request_size = (app.request_size + 10).clamp(20,80);
         }
+        KeyCode::Char('z') => {
+            match app.repeater_view {
+                app::RepeaterView::Split => {
+                    app.repeater_view = match app.repeater_focus {
+                        repeater::RepeaterFocus::Request => app::RepeaterView::ZoomedRequest,
+                        repeater::RepeaterFocus::Response => app::RepeaterView::ZoomedResponse,
+                    };
+                }
+
+                app::RepeaterView::ZoomedRequest => {
+                    app.repeater_view = app::RepeaterView::Split;
+                }
+
+                app::RepeaterView::ZoomedResponse => {
+                    app.repeater_view = app::RepeaterView::Split;
+                }
+            }
+        }
 
         KeyCode::Tab => {
             app.screen = app::Screen::Proxy;

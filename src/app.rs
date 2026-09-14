@@ -10,6 +10,12 @@ pub struct InterceptedRequest {
     pub request: http::Request
 }
 
+pub enum RepeaterView {
+    Split,
+    ZoomedRequest,
+    ZoomedResponse
+}
+
 pub struct App {
     pub screen: Screen,
     pub proxy_scroll: u16,
@@ -20,7 +26,9 @@ pub struct App {
     pub repeaters: Vec<repeater::Repeater>,
     pub selected_repeater: usize,
     pub repeater_focus: repeater::RepeaterFocus,
+
     pub request_size: u16,
+    pub repeater_view: RepeaterView,
 
     pub renaming_repeater: Option<usize>,
 
@@ -39,7 +47,9 @@ impl App {
             repeaters: Vec::new(),
             selected_repeater: 0,
             repeater_focus: repeater::RepeaterFocus::Request,
+
             request_size: 50,
+            repeater_view: RepeaterView::Split,
 
             renaming_repeater: None,
 
