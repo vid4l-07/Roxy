@@ -1,10 +1,164 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
+
 	<head>
-		<title>Roxy</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>roxy</title>
+		<link rel="icon" href="data:,">
+
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg:    #08090c;
+				--fg:    #e6e9ef;
+				--faint: #343a42;
+				--fur:   #e8944f;
+				--ear:   #c9763d;
+			}
+
+			body {
+				margin: 0;
+				min-height: 100vh;
+				display: grid;
+				place-items: center;
+				background: radial-gradient(60vmax 60vmax at 50% 45%, #12141a, var(--bg));
+				color: var(--fg);
+				font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+			}
+
+			main {
+				display: grid;
+				justify-items: center;
+				text-align: center;
+			}
+
+			.fox {
+				position: relative;
+				width: 120px;
+				height: 104px;
+			}
+
+			.ear {
+				position: absolute;
+				top: 0;
+				width: 46px;
+				height: 54px;
+				background: var(--ear);
+				clip-path: polygon(50% 0, 100% 100%, 0 100%);
+			}
+
+			.ear::after {
+				content: "";
+				position: absolute;
+				inset: 15px 13px 8px;
+				background: #2a1c14;
+				clip-path: polygon(50% 0, 100% 100%, 0 100%);
+			}
+
+			.ear.left  { left: 3px;  transform: rotate(-18deg); }
+			.ear.right { right: 3px; transform: rotate(18deg); }
+
+			.head {
+				position: absolute;
+				bottom: 0;
+				left: 50%;
+				width: 104px;
+				height: 82px;
+				transform: translateX(-50%);
+				background: var(--fur);
+				border-radius: 48% 48% 44% 44% / 56% 56% 40% 40%;
+			}
+
+			.eye {
+				position: absolute;
+				top: 49px;
+				width: 9px;
+				height: 12px;
+				border-radius: 50%;
+				background: #1b1410;
+				animation: blink 5.5s infinite;
+			}
+
+			.eye.left  { left: 33px; }
+			.eye.right { right: 33px; }
+
+			@keyframes blink {
+				0%, 92%, 100% { transform: scaleY(1); }
+				95%            { transform: scaleY(.1); }
+			}
+
+			.muzzle {
+				position: absolute;
+				bottom: 5px;
+				left: 50%;
+				width: 46px;
+				height: 30px;
+				transform: translateX(-50%);
+				border-radius: 50% 50% 46% 46%;
+				background: #f7e3cd;
+			}
+
+			.nose {
+				position: absolute;
+				bottom: 23px;
+				left: 50%;
+				width: 13px;
+				height: 9px;
+				transform: translateX(-50%);
+				border-radius: 50% 50% 60% 60%;
+				background: #1b1410;
+			}
+
+			.mark {
+				margin-top: 30px;
+				display: flex;
+				gap: .55em;
+				justify-content: center;
+				font-size: 13px;
+				text-transform: lowercase;
+				transition: gap 0.5s;
+			}
+
+			.mark span {
+				font-size: 1.1rem;
+				display: inline-block;
+				transition: transform 0.5s ease;
+			}
+
+			.mark:hover {
+				gap: 1em;
+			}
+
+			.text {
+				margin-top: 15px;
+			}
+
+			p,a {
+				margin: 0;
+				color: var(--faint);
+				font-size: 14px;
+				text-decoration: none;
+			}
+
+		</style>
 	</head>
+
 	<body>
-		<h1>Roxy</h1>
-		<p>Rust HTTP Proxy</p>
+		<main>
+			<div class="fox">
+				<i class="ear left"></i>
+				<i class="ear right"></i>
+				<i class="head"></i>
+				<i class="eye left"></i>
+				<i class="eye right"></i>
+				<i class="muzzle"></i>
+				<i class="nose"></i>
+			</div>
+
+			<a href="https://github.com/vid4l-07/Roxy" class="mark"><span>r</span><span>o</span><span>x</span><span>y</span></a>
+			<p class="text">Nothing to see, keep going.</p>
+		</main>
 	</body>
+
 </html>
