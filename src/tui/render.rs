@@ -81,30 +81,34 @@ pub(super) fn render_proxy(frame: &mut Frame, app: &app::App) {
 }
 
 pub(super) fn render_repeater(frame: &mut Frame, app: &app::App) {
-    let repeater = match app.repeaters.get(app.selected_repeater) {
-        Some(repeater) => repeater,
-        None => return,
-    };
+    let repeater = app.repeaters.get(app.selected_repeater);
+
     match app.repeater_view {
         app::RepeaterView::Split =>{
             render_split_repeater(frame, app) }
 
         app::RepeaterView::ZoomedRequest => {
-            render_zoomed(
-                frame,
-                repeater.request.to_str(),
-                repeater.request_scroll,
-            )
+            if let Some(repeater) = repeater {
+                render_zoomed(
+                    frame,
+                    repeater.request.to_str(),
+                    repeater.request_scroll,
+                )
+            } else {
+                return;
+            }
         }
 
         app::RepeaterView::ZoomedResponse => {
-            render_zoomed(
-                frame,
-                repeater.response.as_ref()
-                .map(|r| r.to_str())
-                .unwrap_or_default(),
-                repeater.response_scroll,
-            )
+            if let Some(repeater) = repeater {
+                render_zoomed(
+                    frame,
+                    repeater.response.as_ref()
+                    .map(|r| r.to_str())
+                    .unwrap_or_default(),
+                    repeater.response_scroll,
+                )
+            }
         }
     }
 }
@@ -149,13 +153,12 @@ fn render_split_repeater(frame: &mut Frame, app: &app::App) {
     let tabs = Tabs::new(
         app.repeaters[start..].iter().map(|repeater| Line::from(repeater.name.clone()))
         .collect::<Vec<_>>()
+    ).block(
+        Block::bordered()
+        .border_type(BorderType::Rounded)
+        .title(" Repeaters "),
     )
-        .block(
-            Block::bordered()
-            .border_type(BorderType::Rounded)
-            .title(" Repeaters "),
-        )
-        .select(app.selected_repeater - start);
+    .select(app.selected_repeater - start);
     frame.render_widget(Clear, vertical[0]);
     frame.render_widget(tabs, vertical[0]);
 
@@ -172,13 +175,15 @@ fn render_split_repeater(frame: &mut Frame, app: &app::App) {
         }
     }
 
-    let mut block = Block::bordered()
+    // Request
+
+    let mut request_block = Block::bordered()
         .border_type(BorderType::Rounded).border_style(Style::default().fg(request_border_color))
         .title(" Request ");
 
     if let Some(repeater) = app.repeaters.get(app.selected_repeater) {
         if repeater.thinking{
-            block = Block::bordered()
+            request_block = Block::bordered()
                 .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(request_border_color))
                 .title(" Request ")
@@ -196,7 +201,7 @@ fn render_split_repeater(frame: &mut Frame, app: &app::App) {
         request_scroll = repeater.request_scroll;
         response_scroll = repeater.response_scroll;
         if !repeater.request.host.is_empty() {
-            block = block.title_bottom(
+            request_block = request_block.title_bottom(
                 Line::styled(
                     format!(" Host: {}:{} ", repeater.request.host, repeater.request.port),
                     Style::default().fg(Color::Yellow),
@@ -207,17 +212,33 @@ fn render_split_repeater(frame: &mut Frame, app: &app::App) {
     }
 
     let request_info = Paragraph::new(request).wrap(Wrap { trim: false })
-        .block(block)
+        .block(request_block)
         .scroll((request_scroll, 0));
     frame.render_widget(request_info, horizontal[0]);
 
+    // Response
 
-    let response_info = Paragraph::new(response).wrap(Wrap { trim: false }).block(
-        Block::bordered().border_type(BorderType::Rounded)
+    let mut response_block = Block::bordered()
         .border_type(BorderType::Rounded).border_style(Style::default().fg(response_border_color))
-        .title(" Response ")
-    ).scroll((response_scroll, 0));
+        .title(" Response ");
+
+    if let Some(repeater) = app.repeaters.get(app.selected_repeater) {
+        if let Some(response) = &repeater.response {
+            if let Ok((code, msg)) = response.status() {            
+                response_block = response_block.title_bottom(
+                    Line::styled(
+                        format!(" {}: {} ", code, msg),
+                        Style::default().fg(Color::Yellow),
+                    )
+                );
+            }
+        }
+    }
+
+    let response_info = Paragraph::new(response).wrap(Wrap { trim: false }).block(response_block).scroll((response_scroll, 0));
     frame.render_widget(response_info, horizontal[1]);
+
+    // Help
 
     let help = Paragraph::new(
         "[↑↓/jk] Scroll  [←→/hl] Focus  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Prev  [r] Rename  [x] Close  [H/L] Resize"

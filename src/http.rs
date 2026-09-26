@@ -322,6 +322,38 @@ impl Response {
     pub fn to_str(&self) -> String {
         String::from_utf8_lossy(&self.raw).to_string()
     }
+
+    pub fn status(&self) -> io::Result<(u16, String)> {
+    let mut headers = [httparse::EMPTY_HEADER; 64];
+    let mut response = httparse::Response::new(&mut headers);
+
+    match response.parse(&self.raw).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Invalid HTTP response: {e}"),
+        )
+    })? {
+        httparse::Status::Complete(_) => {
+            let code = response.code.ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Missing HTTP status code",
+                )
+            })?;
+
+            let reason = response.reason.unwrap_or("").to_string();
+
+            Ok((code, reason))
+        }
+
+        httparse::Status::Partial => {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Incomplete HTTP response",
+            ))
+        }
+    }
+}
 }
 
 pub async fn read_response(socket: &mut TcpStream) -> io::Result<Response> {
