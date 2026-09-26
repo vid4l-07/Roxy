@@ -7,6 +7,7 @@ mod app;
 mod tui;
 mod proxy;
 mod events;
+mod web_page;
 
 fn wellcome_screen() {
     print!("

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::io;
 
 use crate::{events, http};
+use crate::web_page;
 
 mod connections;
 
@@ -94,6 +95,14 @@ async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
     tui_sender: mpsc::Sender<events::ProxyEvents>, proxy_sender: mpsc::Sender<(usize, oneshot::Sender<http::Request>)>) -> io::Result<()> {
 
     let request = connections::get_request(&mut client).await?;
+
+
+    if (request.host == "127.0.0.1" || request.host == "localhost") && request.port == 8080 {
+        let response = web_page::generate_response();
+        return connections::send_response(&mut client, &response).await;
+    }
+
+
 
     if request.method.eq_ignore_ascii_case("CONNECT") {
         connections::handle_https(&mut client, &request).await?;
