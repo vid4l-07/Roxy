@@ -106,6 +106,26 @@ async fn handle_proxy_input(app: &mut app::App, key: KeyCode, terminal: &mut Def
             }
         }
 
+        KeyCode::Char('?') => {
+            app.popups.push(popups::Popup::List(
+                    popups::ListPopup {
+                        commands: vec![
+                            "↑↓/jk: Scroll".into(),
+                            "Tab: Switch".into(),
+                            "Enter: Send".into(),
+                            "q: Quit".into(),
+                            "i: Intercept".into(),
+                            "e: Edit".into(),
+                            "r: Repeater".into(),
+                        ],
+                        title: " Help ".into(),
+                        color: Color::Reset,
+                        scroll: 0
+                    }
+                )
+            );
+        }
+
         KeyCode::Tab => {
             app.screen = app::Screen::Repeater;
         }
@@ -189,6 +209,30 @@ async fn handle_repeater_input(app: &mut app::App, key: KeyCode, terminal: &mut 
             }
         }
 
+        KeyCode::Char('?') => {
+            app.popups.push(popups::Popup::List(
+                    popups::ListPopup {
+                        commands: vec![
+                            "↑↓/jk: Scroll".into(),
+                            "←→/hl: Focus".into(),
+                            "Tab: Switch".into(),
+                            "Enter: Send".into(),
+                            "q: Quit".into(),
+                            "e: Edit".into(),
+                            "n: Next".into(),
+                            "p: Prev".into(),
+                            "r: Rename".into(),
+                            "x: Close".into(),
+                            "H/L: Resize".into(),
+                        ],
+                        title: " Help ".into(),
+                        color: Color::Reset,
+                        scroll: 0
+                    }
+                )
+            );
+        }
+
         KeyCode::Down | KeyCode::Char('j') => {
             if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
                 match app.repeater_focus {
@@ -217,14 +261,15 @@ async fn handle_repeater_input(app: &mut app::App, key: KeyCode, terminal: &mut 
             }
         }
 
-        KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l') => {
-            match app.repeater_focus {
-                repeater::RepeaterFocus::Request => {
-                    app.repeater_focus = repeater::RepeaterFocus::Response;
-                }
-                repeater::RepeaterFocus::Response => {
-                    app.repeater_focus = repeater::RepeaterFocus::Request;
-                }
+        KeyCode::Right | KeyCode::Char('l') => {
+            if let repeater::RepeaterFocus::Request = app.repeater_focus{
+                app.repeater_focus = repeater::RepeaterFocus::Response;
+            }
+        }
+
+        KeyCode::Left | KeyCode::Char('h') => {
+            if let repeater::RepeaterFocus::Response = app.repeater_focus{
+                app.repeater_focus = repeater::RepeaterFocus::Request;
             }
         }
 

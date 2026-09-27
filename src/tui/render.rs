@@ -67,7 +67,7 @@ pub(super) fn render_proxy(frame: &mut Frame, app: &app::App) {
     frame.render_widget(request_info, vertical[1]);
 
     let help = Paragraph::new(
-        "[↑↓/jk] Scroll  [Tab] Switch  [Enter] Send  [q] Quit  [i] Intercept  [e] Edit  [r] Repeater",
+        "[?] Help"
     )
         .alignment(Alignment::Right)
         .block(
@@ -241,7 +241,7 @@ fn render_split_repeater(frame: &mut Frame, app: &app::App) {
     // Help
 
     let help = Paragraph::new(
-        "[↑↓/jk] Scroll  [←→/hl] Focus  [Tab] Switch  [Enter] Send  [q] Quit  [e] Edit  [n] Next  [p] Prev  [r] Rename  [x] Close  [H/L] Resize"
+        "[?] Help"
     )
         .alignment(Alignment::Right)
         .block(
