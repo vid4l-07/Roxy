@@ -8,7 +8,7 @@ use crate::{app, http, editor, events, repeater, tui::popups};
 pub fn error_popup(app: &mut app::App, error: impl Into<String>){
     app.popups.push(
         popups::Popup::Text(
-            popups::TextPopup {
+            popups::text::TextPopup {
                 message: error.into(),
                 title: " Error ".into(),
                 color: Color::Red,
@@ -108,7 +108,7 @@ async fn handle_proxy_input(app: &mut app::App, key: KeyCode, terminal: &mut Def
 
         KeyCode::Char('?') => {
             app.popups.push(popups::Popup::List(
-                    popups::ListPopup {
+                    popups::list::ListPopup {
                         commands: vec![
                             "↑↓/jk: Scroll".into(),
                             "Tab: Switch".into(),
@@ -198,7 +198,7 @@ async fn handle_repeater_input(app: &mut app::App, key: KeyCode, terminal: &mut 
                 app.renaming_repeater = Some(app.selected_repeater);
 
                 app.popups.push(popups::Popup::Input(
-                        popups::InputPopup {
+                        popups::input::InputPopup {
                             input: String::new(),
                             title: " Rename ".to_owned(),
                             color: Color::Reset,
@@ -211,7 +211,7 @@ async fn handle_repeater_input(app: &mut app::App, key: KeyCode, terminal: &mut 
 
         KeyCode::Char('?') => {
             app.popups.push(popups::Popup::List(
-                    popups::ListPopup {
+                    popups::list::ListPopup {
                         commands: vec![
                             "↑↓/jk: Scroll".into(),
                             "←→/hl: Focus".into(),
