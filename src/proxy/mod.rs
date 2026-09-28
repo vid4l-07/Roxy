@@ -97,7 +97,7 @@ async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
     let request = connections::get_request(&mut client).await?;
 
 
-    if (request.host == "127.0.0.1" || request.host == "localhost") && request.port == 8080 {
+    if matches!(request.host.as_str(), "127.0.0.1" | "localhost" | "roxy") && request.port == 8080 {
         let response = web_page::generate_response();
         return connections::send_response(&mut client, &response).await;
     }
