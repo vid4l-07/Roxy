@@ -28,6 +28,8 @@ pub fn generate_ca() -> Result<(Certificate, KeyPair), rcgen::Error> {
 
     let certificate = params.self_signed(&key_pair)?;
 
+    let _ = fs::remove_dir_all(CERTS_FOLDER);
+
     Ok((certificate, key_pair))
 }
 
