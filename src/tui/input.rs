@@ -82,9 +82,7 @@ async fn handle_proxy_input(app: &mut app::App, key: KeyCode, terminal: &mut Def
             if let Some(intercepted) = app.request_queue.first_mut() {
                 match editor::edit(&intercepted.request.to_str()) {
                     Ok(edited) => {
-                        intercepted.request = http::Request::from_edited(
-                            &edited, intercepted.request.host.clone(), intercepted.request.port
-                        );
+                        intercepted.request = http::Request::from_edited(&edited, &intercepted.request);
                     }
 
                     Err(e) => {

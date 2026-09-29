@@ -1,8 +1,12 @@
-use tokio::net::TcpStream;
-use tokio::io::{AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use std::io;
 use url::Url;
 
+#[derive(Clone)]
+pub enum Protocol {
+    HTTP,
+    HTTPS
+}
 
 // Request
 #[derive(Clone)]
@@ -15,10 +19,11 @@ pub struct Request {
 
     pub host: String,
     pub port: u16,
+
+    pub protocol: Protocol,
 }
 
 impl Request {
-    
     // Constructor
     pub fn from_bytes(data: &[u8]) -> io::Result<Self> {
         let mut headers = [httparse::EMPTY_HEADER; 64];
@@ -41,25 +46,25 @@ impl Request {
         };
 
         let method = request.method.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Missing HTTP method",
-                )
-            })?.to_string();
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing HTTP method",
+            )
+        })?.to_string();
 
         let target = request.path.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Missing request target",
-                )
-            })?.to_string();
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing request target",
+            )
+        })?.to_string();
 
         let version = request.version.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Missing HTTP version",
-                )
-            })?;
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing HTTP version",
+            )
+        })?;
 
         let mut request_headers = Vec::new();
 
@@ -84,6 +89,7 @@ impl Request {
                 body,
                 host,
                 port,
+                protocol: Protocol::HTTPS
             });
         }
 
@@ -98,6 +104,7 @@ impl Request {
             body,
             host,
             port,
+            protocol: Protocol::HTTP
         })
     }
 
@@ -132,18 +139,18 @@ impl Request {
             }
 
             return Ok((
-                target,
-                host.to_string(),
-                port,
+                    target,
+                    host.to_string(),
+                    port,
             ));
         }
 
         let (host, port) = Self::parse_host(headers)?;
 
         Ok((
-            target.to_string(),
-            host,
-            port,
+                target.to_string(),
+                host,
+                port,
         ))
     }
 
@@ -189,7 +196,11 @@ impl Request {
     }
 
 
-    pub fn from_edited(data: &str, host: String, port: u16) -> Self {
+    pub fn from_edited(data: &str, old_request: &Request) -> Self {
+        let host = old_request.host.clone();
+        let port = old_request.port;
+        let protocol = old_request.protocol.clone();
+
         let (headers_part, body) = data
             .split_once("\r\n\r\n")
             .unwrap_or((data, ""));
@@ -234,6 +245,7 @@ impl Request {
             body: body.as_bytes().to_vec(),
             host,
             port,
+            protocol,
         }
     }
 
@@ -264,52 +276,53 @@ impl Request {
 
 }
 
-pub async fn read_request(socket: &mut TcpStream) -> io::Result<Request> {
-        let mut buff = [0u8; 4096];
-        let mut vec: Vec<u8> = Vec::new();
+pub async fn read_request<S>(socket: &mut S) -> io::Result<Request> 
+where S: AsyncRead + Unpin {
+    let mut buff = [0u8; 4096];
+    let mut vec: Vec<u8> = Vec::new();
 
-        loop {
-            let n = socket.read(&mut buff).await?;
+    loop {
+        let n = socket.read(&mut buff).await?;
 
-            if n == 0{
-                break;
-            }
+        if n == 0{
+            break;
+        }
 
-            vec.extend_from_slice(&buff[..n]);
-            let mut headers = [httparse::EMPTY_HEADER; 64];
-            let mut request = httparse::Request::new(&mut headers);
+        vec.extend_from_slice(&buff[..n]);
+        let mut headers = [httparse::EMPTY_HEADER; 64];
+        let mut request = httparse::Request::new(&mut headers);
 
-            match request.parse(&vec) {
-                Ok(httparse::Status::Complete(n)) => {
-                    let mut content_length: Option<usize> = None;
+        match request.parse(&vec) {
+            Ok(httparse::Status::Complete(n)) => {
+                let mut content_length: Option<usize> = None;
 
-                    for header in request.headers {
-                        if header.name.eq_ignore_ascii_case("Content-Length"){
-                            content_length = String::from_utf8_lossy(header.value).parse().ok();
-                        }
+                for header in request.headers {
+                    if header.name.eq_ignore_ascii_case("Content-Length"){
+                        content_length = String::from_utf8_lossy(header.value).parse().ok();
                     }
+                }
 
-                    match content_length {
-                        Some(length) => {
-                            if vec[n..].len() >= length {
-                                break;
-                            }
-                        }
-
-                        None => {
+                match content_length {
+                    Some(length) => {
+                        if vec[n..].len() >= length {
                             break;
                         }
                     }
 
+                    None => {
+                        break;
+                    }
                 }
 
-                Ok(httparse::Status::Partial) => {}
-                Err(e) => {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, e));
-                }
+            }
+
+            Ok(httparse::Status::Partial) => {}
+            Err(e) => {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, e));
             }
         }
-        Request::from_bytes(&vec)
+    }
+    Request::from_bytes(&vec)
 }
 
 
@@ -324,83 +337,85 @@ impl Response {
     }
 
     pub fn status(&self) -> io::Result<(u16, String)> {
-    let mut headers = [httparse::EMPTY_HEADER; 64];
-    let mut response = httparse::Response::new(&mut headers);
+        let mut headers = [httparse::EMPTY_HEADER; 64];
+        let mut response = httparse::Response::new(&mut headers);
 
-    match response.parse(&self.raw).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Invalid HTTP response: {e}"),
-        )
-    })? {
-        httparse::Status::Complete(_) => {
-            let code = response.code.ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Missing HTTP status code",
-                )
-            })?;
-
-            let reason = response.reason.unwrap_or("").to_string();
-
-            Ok((code, reason))
-        }
-
-        httparse::Status::Partial => {
-            Err(io::Error::new(
+        match response.parse(&self.raw).map_err(|e| {
+            io::Error::new(
                 io::ErrorKind::InvalidData,
-                "Incomplete HTTP response",
-            ))
+                format!("Invalid HTTP response: {e}"),
+            )
+        })? {
+            httparse::Status::Complete(_) => {
+                let code = response.code.ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Missing HTTP status code",
+                    )
+                })?;
+
+                let reason = response.reason.unwrap_or("").to_string();
+
+                Ok((code, reason))
+            }
+
+            httparse::Status::Partial => {
+                Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Incomplete HTTP response",
+                ))
+            }
         }
     }
 }
-}
 
-pub async fn read_response(socket: &mut TcpStream) -> io::Result<Response> {
-        let mut buff = [0u8; 4096];
-        let mut vec: Vec<u8> = Vec::new();
+pub async fn read_response<S>(socket: &mut S) -> io::Result<Response> 
+where S: AsyncRead + Unpin {
 
-        loop {
-            let n = socket.read(&mut buff).await?;
+    let mut buff = [0u8; 4096];
+    let mut vec: Vec<u8> = Vec::new();
 
-            if n == 0{
-                break;
-            }
+    loop {
+        let n = socket.read(&mut buff).await?;
 
-            vec.extend_from_slice(&buff[..n]);
-            let mut headers = [httparse::EMPTY_HEADER; 64];
-            let mut request = httparse::Response::new(&mut headers);
+        if n == 0{
+            break;
+        }
 
-            match request.parse(&vec) {
-                Ok(httparse::Status::Complete(n)) => {
-                    let mut content_length: Option<usize> = None;
+        vec.extend_from_slice(&buff[..n]);
+        let mut headers = [httparse::EMPTY_HEADER; 64];
+        let mut request = httparse::Response::new(&mut headers);
 
-                    for header in request.headers {
-                        if header.name == "Content-Length"{
-                            content_length = String::from_utf8_lossy(header.value).parse().ok();
-                        }
+        match request.parse(&vec) {
+            Ok(httparse::Status::Complete(n)) => {
+                let mut content_length: Option<usize> = None;
+
+                for header in request.headers {
+                    if header.name == "Content-Length"{
+                        content_length = String::from_utf8_lossy(header.value).parse().ok();
                     }
+                }
 
-                    match content_length {
-                        Some(length) => {
-                            if vec[n..].len() >= length {
-                                break;
-                            }
-                        }
-
-                        None => {
+                match content_length {
+                    Some(length) => {
+                        if vec[n..].len() >= length {
                             break;
                         }
                     }
 
+                    None => {
+                        break;
+                    }
                 }
 
-                Ok(httparse::Status::Partial) => {}
-                Err(e) => {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, e));
-                }
+            }
+
+            Ok(httparse::Status::Partial) => {}
+            Err(e) => {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, e));
             }
         }
-        Ok(Response { raw: vec })
+    }
+    Ok(Response { raw: vec })
 }
 

@@ -8,6 +8,7 @@ mod tui;
 mod proxy;
 mod events;
 mod web_page;
+mod certs;
 
 fn wellcome_screen() {
     print!("
@@ -25,6 +26,25 @@ fn wellcome_screen() {
 
 #[tokio::main]
 async fn main() {
+
+    // let (ca, ca_key) = certs::generate_ca().unwrap();
+    //
+    // certs::save_ca(&ca, &ca_key).unwrap();
+    //
+    // let (certificate, key_pair) =
+    //     certs::generate_certificate(
+    //         &ca,
+    //         &ca_key,
+    //         "localhost",
+    //     ).unwrap();
+    //
+    // certs::save_certificate(
+    //     &certificate,
+    //     &key_pair,
+    //     "localhost",
+    // ).unwrap();
+
+
     wellcome_screen();
     let (proxy_sender, proxy_receiver) = mpsc::channel::<events::ProxyEvents>(32);
     let (tui_sender, tui_receiver) = mpsc::channel::<events::TuiEvents>(32);
@@ -40,7 +60,7 @@ async fn main() {
     if tui::run(&mut app, tui_sender, proxy_receiver).await.is_err() {
         std::process::exit(1);
     }
-
+    //
     // Workflow
     // let listener = TcpListener::bind("127.0.0.1:8080").await?;
     // let (client, _) = listener.accept().await?;

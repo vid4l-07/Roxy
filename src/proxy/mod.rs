@@ -78,7 +78,9 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
                     }
 
                     Some(events::TuiEvents::SendRepeater { index, request }) => {
-                        send_repeater(sender, request, index).await;
+                        if let Err(e) = send_repeater(sender, request, index).await{
+                            let _ = send_event(&sender, events::ProxyEvents::Error(e.to_string())).await; 
+                        }
                     }
 
                     None => {
@@ -96,62 +98,103 @@ async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
 
     let request = connections::get_request(&mut client).await?;
 
-
     if matches!(request.host.as_str(), "127.0.0.1" | "localhost" | "roxy") && request.port == 8080 {
         let response = web_page::generate_response();
         return connections::send_response(&mut client, &response).await;
     }
 
-
-
+    // HTTPS
     if request.method.eq_ignore_ascii_case("CONNECT") {
-        connections::handle_https(&mut client, &request).await?;
-        return Ok(());
-    }
 
-    if intercept {
-        let (tx, rx) = oneshot::channel();
+        let (mut client, request) = connections::handle_https(client, &request).await?;
 
-        proxy_sender.send((id, tx)).await.map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, e)
-        })?;
+        let request = if intercept{
+            let (tx, rx) = oneshot::channel();
 
-        send_event(&tui_sender, events::ProxyEvents::ReceivedRequest{ id, request }).await?;
+            proxy_sender.send((id, tx)).await.map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, e)
+            })?;
 
-        let request = rx.await.map_err(|e| {      // Wait for the proxy to send the forward command with the edited request
-            io::Error::new(io::ErrorKind::Other, e)
-        })?;
 
-        connections::forward(&mut client, &request).await?;
+            send_event(&tui_sender, events::ProxyEvents::ReceivedRequest{ id, request }).await?;
 
+            rx.await.map_err(|e| {      // Wait for the proxy to send the forward command with the edited request
+                io::Error::new(io::ErrorKind::Other, e)
+            })?
+
+        } else {
+            request
+        };
+
+        let mut server = connections::connect_tls(&request).await?;
+        connections::forward(&mut client, &mut server, &request).await?;
+
+    // HTTP
     } else {
-        connections::forward(&mut client, &request).await?;
+        let request = if intercept {
+            let (tx, rx) = oneshot::channel();
+
+            proxy_sender.send((id, tx)).await.map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, e)
+            })?;
+
+
+            send_event(&tui_sender, events::ProxyEvents::ReceivedRequest{ id, request }).await?;
+
+            rx.await.map_err(|e| {      // Wait for the proxy to send the forward command with the edited request
+                io::Error::new(io::ErrorKind::Other, e)
+            })?
+
+        } else {
+            request
+        };
+
+        let mut server = connections::connect_to_server(&request).await?;
+        connections::forward(&mut client, &mut server, &request).await?;
+
     }
 
     Ok(())
 }
 
-async fn send_repeater(sender: &mpsc::Sender<events::ProxyEvents>, request: http::Request, index: usize) {
+async fn send_repeater(sender: &mpsc::Sender<events::ProxyEvents>, request: http::Request, index: usize) -> io::Result<()>{
     let sender = sender.clone();
 
     tokio::spawn(async move {
-        match connections::send_request(&request).await {
-            Ok(response) => {
-                let _ = sender.send(
-                    events::ProxyEvents::RepeaterResponse {
-                        index,
-                        response,
-                    }
-                ).await;
+
+        let result = if let http::Protocol::HTTPS = request.protocol {
+            match connections::connect_tls(&request).await {
+                Ok(mut server) => {
+                    connections::send_request(&mut server, &request).await
+                }
+                Err(e) => {
+                    let _ = sender.send(events::ProxyEvents::Error(e.to_string())).await;
+                    return;
+                }
+            }
+        } else {
+            match connections::connect_to_server(&request).await {
+                Ok(mut server) => {
+                    connections::send_request(&mut server, &request).await
+                }
+                Err(e) => {
+                    let _ = sender.send(events::ProxyEvents::Error(e.to_string())).await;
+                    return;
+                }
             }
 
-            Err(error) => {
-                let _ = sender.send(
-                    events::ProxyEvents::Error(
-                        error.to_string()
-                    )
-                ).await;
+        };
+
+
+        match result {
+            Ok(response) => {
+                let _ = sender.send(events::ProxyEvents::RepeaterResponse { index, response }).await;
+            }
+
+            Err(e) => {
+                let _ = sender.send(events::ProxyEvents::Error(e.to_string())).await;
             }
         }
     });
+    Ok(())
 }
