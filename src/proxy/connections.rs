@@ -8,6 +8,7 @@ use tokio_rustls::{rustls::{ClientConfig, RootCertStore}, TlsConnector, server::
 
 use crate::http;
 
+
 pub async fn connect_to_server(request: &http::Request) -> io::Result<TcpStream> {
     let address = format!("{}:{}", &request.host, &request.port);
 
@@ -46,7 +47,7 @@ pub async fn handle_https(mut client: TcpStream, request: &http::Request) -> io:
 
     client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
 
-    let acceptor = crate::certs::create_tls_acceptor()?;
+    let acceptor = crate::certs::create_tls_acceptor(&request.host)?;
 
     let mut client = acceptor.accept(client).await?;
 
@@ -68,28 +69,21 @@ pub async fn connect_tls(request: &http::Request) -> io::Result<tokio_rustls::cl
         roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
     };
 
-    let config = ClientConfig::builder()
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
+    let config = ClientConfig::builder().with_root_certificates(root_store).with_no_client_auth();
 
     let connector = TlsConnector::from(Arc::new(config));
 
-    let server_name = tokio_rustls::rustls::pki_types::ServerName::try_from(request.host.as_str())
-        .map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Invalid server name",
-            )
-        })?
-        .to_owned();
+    let server_name = tokio_rustls::rustls::pki_types::ServerName::try_from(request.host.as_str()).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid server name",
+        )
+    })?.to_owned();
 
-    connector
-        .connect(server_name, stream)
-        .await
-        .map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                e,
-            )
-        })
+    connector.connect(server_name, stream).await.map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            e,
+        )
+    })
 }

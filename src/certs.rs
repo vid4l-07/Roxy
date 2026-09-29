@@ -1,10 +1,10 @@
 use rcgen::{BasicConstraints, Certificate, CertificateParams, IsCa, KeyPair};
-
 use tokio_rustls::rustls::{pki_types::{CertificateDer, PrivateKeyDer}};
-
 use tokio_rustls::{rustls::ServerConfig, TlsAcceptor};
-
 use std::{fs::{self, File}, io::BufReader, sync::Arc};
+
+const CA_FOLDER: &str = "certs";
+const CERTS_FOLDER: &str = "/tmp/roxy_certs";
 
 pub fn generate_ca() -> Result<(Certificate, KeyPair), rcgen::Error> {
     let key_pair = KeyPair::generate()?;
@@ -20,6 +20,70 @@ pub fn generate_ca() -> Result<(Certificate, KeyPair), rcgen::Error> {
     Ok((certificate, key_pair))
 }
 
+pub fn save_ca(certificate: &Certificate, key_pair: &KeyPair) -> std::io::Result<()> {
+    fs::create_dir_all(CA_FOLDER)?;
+
+    fs::write(format!("{}/ca.crt", CA_FOLDER), certificate.pem())?;
+
+    fs::write(format!("{}/ca.key", CA_FOLDER), key_pair.serialize_pem())?;
+
+    Ok(())
+}
+
+fn exists_ca() -> bool {
+    fs::metadata(format!("{}/ca.crt", CA_FOLDER)).is_ok() && fs::metadata(format!("{}/ca.key", CA_FOLDER)).is_ok()
+}
+
+fn get_or_create_ca() -> std::io::Result<(Certificate, KeyPair)> {
+    if exists_ca() {
+        let ca_pem = fs::read_to_string(
+            format!("{}/ca.crt", CA_FOLDER)
+        )?;
+
+        let ca_key_pem = fs::read_to_string(
+            format!("{}/ca.key", CA_FOLDER)
+        )?;
+
+        let ca_key = KeyPair::from_pem(&ca_key_pem)
+            .map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    e,
+                )
+            })?;
+
+        let params = CertificateParams::from_ca_cert_pem(&ca_pem)
+            .map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    e,
+                )
+            })?;
+        let ca = params.self_signed(&ca_key)
+            .map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    e,
+                )
+            })?;
+
+        Ok((ca, ca_key))
+    } else {
+        let (ca, ca_key) = generate_ca()
+            .map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    e,
+                )
+            })?;
+
+        save_ca(&ca, &ca_key)?;
+
+        Ok((ca, ca_key))
+    }
+}
+
+
 pub fn generate_certificate(ca: &Certificate, ca_key: &KeyPair, host: &str) -> Result<(Certificate, KeyPair), rcgen::Error> {
     let key_pair = KeyPair::generate()?;
 
@@ -32,20 +96,12 @@ pub fn generate_certificate(ca: &Certificate, ca_key: &KeyPair, host: &str) -> R
     Ok((certificate, key_pair))
 }
 
-pub fn save_ca(certificate: &Certificate, key_pair: &KeyPair) -> std::io::Result<()> {
-    fs::create_dir_all("certs")?;
-
-    fs::write("certs/ca.crt", certificate.pem())?;
-
-    fs::write("certs/ca.key", key_pair.serialize_pem())?;
-
-    Ok(())
-}
-
 pub fn save_certificate(certificate: &Certificate, key_pair: &KeyPair, host: &str) -> std::io::Result<()> {
-    std::fs::write( format!("certs/{host}.crt"), certificate.pem())?;
+    fs::create_dir_all(CERTS_FOLDER)?;
 
-    std::fs::write( format!("certs/{host}.key"), key_pair.serialize_pem())?;
+    std::fs::write( format!("{}/{}.crt", CERTS_FOLDER, host), certificate.pem())?;
+
+    std::fs::write( format!("{}/{}.key", CERTS_FOLDER, host), key_pair.serialize_pem())?;
 
     Ok(())
 }
@@ -83,18 +139,46 @@ pub fn load_private_key(path: &str) -> std::io::Result<PrivateKeyDer<'static>> {
         })
 }
 
-pub fn create_tls_acceptor() -> std::io::Result<TlsAcceptor> {
-    let certificates = load_certificates(
-        "certs/localhost.crt"
-    )?;
+fn exists_cert(host: &str) -> bool {
+    fs::metadata(format!("{}/{}.crt", CERTS_FOLDER, host)).is_ok() && fs::metadata(format!("{}/{}.key", CERTS_FOLDER, host)).is_ok()
+}
 
-    let private_key = load_private_key(
-        "certs/localhost.key"
-    )?;
+fn get_or_create_certificate(ca: &Certificate, ca_key: &KeyPair, host: &str) -> std::io::Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
 
-    let config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certificates, private_key)
+    if exists_cert(host) {
+        let certificates = load_certificates(&format!("{}/{}.crt", CERTS_FOLDER, host))?;
+
+        let private_key = load_private_key(&format!("{}/{}.key", CERTS_FOLDER, host))?;
+
+        Ok((certificates, private_key))
+
+    } else {
+        let (certificate, key_pair) = generate_certificate(ca, ca_key, host)
+            .map_err(|e| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    e,
+                )
+            })?;
+
+        save_certificate(&certificate, &key_pair, host)?;
+
+        let certificates = vec![CertificateDer::from(certificate.der().to_vec())];
+
+        let private_key = PrivateKeyDer::Pkcs8(
+            key_pair.serialize_der().into()
+        );
+
+        Ok((certificates, private_key))
+    }
+}
+
+pub fn create_tls_acceptor(host: &str) -> std::io::Result<TlsAcceptor> {
+    let (ca, ca_key) = get_or_create_ca()?;
+
+    let (certificates, private_key) = get_or_create_certificate(&ca, &ca_key, host)?;
+
+    let config = ServerConfig::builder().with_no_client_auth().with_single_cert(certificates, private_key)
         .map_err(|e| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
