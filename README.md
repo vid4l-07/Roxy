@@ -32,14 +32,9 @@ To build it from source you need:
 
 | Requirement | Notes |
 | --- | --- |
-| Rust 1.85 or newer | Roxy uses the 2024 edition. Check with `rustc --version`. Install from [rustup](https://rustup.rs). |
-| A C compiler | `gcc` or `clang`. |
-| CMake 3.18 or newer | Required to build the TLS backend. Install it with your package manager, e.g. `sudo apt install build-essential cmake` or `sudo dnf install gcc cmake`. |
+| Rust 1.85 or newer | Check with `rustc --version`. |
+| A C compiler | `gcc` or `clang`.  |
 | `$EDITOR` | Only needed for the request editing feature. |
-
-> [!Note]
-> CMake and a C compiler are not optional. Roxy relies on [rustls](https://github.com/rustls/rustls), which builds [AWS-LC](https://github.com/aws/aws-lc) from source through `aws-lc-sys`. 
-> If the build fails while compiling `aws-lc-sys`, install `cmake` and a C compiler and run `cargo build --release` again.
 
 ## Installation
 

@@ -17,7 +17,6 @@ tempfile = "3.27.0"
 
 rcgen = { version = "0.13", features = ["x509-parser"] }
 
-rustls = "0.23.45"
 rustls-pemfile = "2.2.0"
-tokio-rustls = "0.26.6"
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12", "logging"] }
 webpki-roots = "1.0.9"
