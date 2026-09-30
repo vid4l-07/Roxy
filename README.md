@@ -119,6 +119,8 @@ You will have to trust the new CA again. Remember to remove the old one from you
 | `i` | Toggle intercept ON/OFF |
 | `Enter` | Forward the intercepted request |
 | `e` | Edit request in external editor |
+| `u` | Undo edit |
+| `U` | Redo edit |
 | `r` | Send request to Repeater |
 | `↑`/`k` | Scroll up |
 | `↓`/`j` | Scroll down |
@@ -129,6 +131,8 @@ You will have to trust the new CA again. Remember to remove the old one from you
 | --- | --- |
 | `Enter` | Send the current request |
 | `e` | Edit request in external editor |
+| `u` | Undo edit |
+| `U` | Redo edit |
 | `r` | Rename current tab |
 | `n` | Next repeater tab |
 | `p` | Previous repeater tab |

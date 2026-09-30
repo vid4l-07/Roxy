@@ -82,6 +82,8 @@ async fn handle_proxy_input(app: &mut app::App, key: KeyCode, terminal: &mut Def
             if let Some(intercepted) = app.request_queue.first_mut() {
                 match editor::edit(&intercepted.request.to_str()) {
                     Ok(edited) => {
+                        app.next_requests_stack.clear();
+                        app.previous_requests_stack.push(intercepted.request.clone());
                         intercepted.request = http::Request::from_edited(&edited, &intercepted.request);
                     }
 
@@ -92,6 +94,24 @@ async fn handle_proxy_input(app: &mut app::App, key: KeyCode, terminal: &mut Def
             }
 
             *terminal = ratatui::init();
+        }
+
+        KeyCode::Char('u') => {
+            if let Some(intercepted) = app.request_queue.first_mut() {
+                if let Some(previous) = app.previous_requests_stack.pop() {
+                    app.next_requests_stack.push(intercepted.request.clone());
+                    intercepted.request = previous;
+                }
+            }
+        }
+
+        KeyCode::Char('U') => {
+            if let Some(intercepted) = app.request_queue.first_mut() {
+                if let Some(next) = app.next_requests_stack.pop() {
+                    app.previous_requests_stack.push(intercepted.request.clone());
+                    intercepted.request = next;
+                }
+            }
         }
 
         KeyCode::Char('r') => {
@@ -114,6 +134,8 @@ async fn handle_proxy_input(app: &mut app::App, key: KeyCode, terminal: &mut Def
                             "q: Quit".into(),
                             "i: Intercept".into(),
                             "e: Edit".into(),
+                            "u: Undo".into(),
+                            "U: Redo".into(),
                             "r: Repeater".into(),
                         ],
                         title: " Help ".into(),
@@ -172,6 +194,18 @@ async fn handle_repeater_input(app: &mut app::App, key: KeyCode, terminal: &mut 
             }
         }
 
+        KeyCode::Char('u') => {
+            if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
+                repeater.undo();
+            }
+        }
+
+        KeyCode::Char('U') => {
+            if let Some(repeater) = app.repeaters.get_mut(app.selected_repeater) {
+                repeater.redo();
+            }
+        }
+
         KeyCode::Char('x') => {
             if app.repeaters.get(app.selected_repeater).is_some() {
                 app.repeaters.remove(app.selected_repeater);
@@ -217,10 +251,13 @@ async fn handle_repeater_input(app: &mut app::App, key: KeyCode, terminal: &mut 
                             "Enter: Send".into(),
                             "q: Quit".into(),
                             "e: Edit".into(),
+                            "u: Undo".into(),
+                            "U: Redo".into(),
                             "n: Next".into(),
                             "p: Prev".into(),
                             "r: Rename".into(),
                             "x: Close".into(),
+                            "z: Zoom".into(),
                             "H/L: Resize".into(),
                         ],
                         title: " Help ".into(),
@@ -307,9 +344,9 @@ async fn handle_repeater_input(app: &mut app::App, key: KeyCode, terminal: &mut 
 }
 
 fn scroll_down(scroll: &mut u16) {
-    *scroll = scroll.saturating_add(2);
+    *scroll = scroll.saturating_sub(2);
 }
 
 fn scroll_up(scroll: &mut u16) {
-    *scroll = scroll.saturating_sub(2);
+    *scroll = scroll.saturating_add(2);
 }

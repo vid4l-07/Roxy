@@ -21,6 +21,8 @@ pub struct App {
     pub proxy_scroll: u16,
 
     pub request_queue: Vec<InterceptedRequest>,
+    pub previous_requests_stack: Vec<http::Request>,
+    pub next_requests_stack: Vec<http::Request>,
     pub intercept: bool,
 
     pub repeaters: Vec<repeater::Repeater>,
@@ -42,6 +44,8 @@ impl App {
             proxy_scroll: 0,
 
             request_queue: Vec::new(),
+            previous_requests_stack: Vec::new(),
+            next_requests_stack: Vec::new(),
             intercept: false,
 
             repeaters: Vec::new(),
