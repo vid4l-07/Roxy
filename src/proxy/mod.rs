@@ -96,7 +96,9 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
 async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
     tui_sender: mpsc::Sender<events::ProxyEvents>, proxy_sender: mpsc::Sender<(usize, oneshot::Sender<http::Request>)>) -> io::Result<()> {
 
-    let request = connections::get_request(&mut client).await?;
+    let Ok(request) = connections::get_request(&mut client).await else {
+        return Ok(())
+    };
 
     if matches!((request.host.as_str(), request.port), ("roxy", _) | ("127.0.0.1" | "localhost", 8080)) {
         let response = web_page::generate_response();
@@ -106,9 +108,8 @@ async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
     // HTTPS
     if request.method.eq_ignore_ascii_case("CONNECT") {
 
-        let (mut client, request) = match connections::handle_https(client, &request).await {
-            Ok(value) => value,
-            Err(_) => return Ok(()),
+        let Ok((mut client, request)) = connections::handle_https(client, &request).await else {
+            return Ok(())
         };
 
         let request = if intercept{
