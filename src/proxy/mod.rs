@@ -101,7 +101,15 @@ async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
     };
 
     if matches!((request.host.as_str(), request.port), ("roxy", _) | ("127.0.0.1" | "localhost", 8080)) {
-        let response = web_page::generate_response();
+        let response = if request.target == "/ca.crt" {
+            match web_page::download_ca() {
+                Ok(value) => value,
+                Err(e) => web_page::error(e.to_string()),
+            }
+        } else {
+            web_page::send_web_page()
+        };
+
         return connections::send_response(&mut client, &response).await;
     }
 

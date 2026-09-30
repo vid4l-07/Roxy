@@ -5,7 +5,7 @@ use std::{fs::{self, File}, io::BufReader, sync::Arc, path::PathBuf};
 
 const CERTS_FOLDER: &str = "/tmp/roxy_certs";
 
-fn ca_folder() -> std::io::Result<PathBuf> {
+pub fn ca_folder() -> std::io::Result<PathBuf> {
     let home = std::env::var("HOME")
         .map_err(|_| {
             std::io::Error::new(
@@ -51,7 +51,7 @@ fn exists_ca() -> std::io::Result<bool> {
     Ok(folder.join("ca.crt").exists() && folder.join("ca.key").exists())
 }
 
-fn get_or_create_ca() -> std::io::Result<(Certificate, KeyPair)> {
+pub fn get_or_create_ca() -> std::io::Result<(Certificate, KeyPair)> {
     if exists_ca()? {
         let folder = ca_folder()?;
 

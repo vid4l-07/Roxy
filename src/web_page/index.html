@@ -38,6 +38,20 @@
 				display: grid;
 				gap: 22px;
 			}
+			.ca {
+				position: fixed;
+				top: 24px;
+				right: 28px;
+				color: var(--dim);
+				font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+				letter-spacing: .20em;
+				transition: color .3s ease, text-shadow .3s ease;
+			}
+
+			.ca:hover {
+				color: var(--fg);
+				text-shadow: 0 0 10px var(--dim);
+			}
 
 			pre {
 				margin: 0;
@@ -92,6 +106,7 @@
 
 	<body>
 		<main>
+			<a href="/ca.crt" class="ca">ca.crt</a>
 			<pre class="req">GET <span id="path">/</span> HTTP/1.1
 <span class="key">host:</span> 127.0.0.1:8080
 <span class="key">user-agent:</span> <span id="ua">-</span></pre>
