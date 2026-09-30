@@ -21,7 +21,7 @@ pub enum ProxyEvents {
     FatalError(String),
     RepeaterResponse {
         index: usize,
-        response: http::Response
+        response: Option<http::Response>
     }
 
 }

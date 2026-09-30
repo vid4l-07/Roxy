@@ -62,7 +62,9 @@ async fn main_loop(app: &mut app::App, sender: mpsc::Sender<events::TuiEvents>, 
 
                     Some(events::ProxyEvents::RepeaterResponse { index, response }) => {
                         if let Some(repeater) = app.repeaters.get_mut(index) {
-                            repeater.response = Some(response);
+                            if let Some(r) = response{
+                                repeater.response = Some(r);
+                            }
                             repeater.thinking = false;
                         }
                     }

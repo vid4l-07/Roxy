@@ -98,7 +98,7 @@ async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
 
     let request = connections::get_request(&mut client).await?;
 
-    if matches!(request.host.as_str(), "127.0.0.1" | "localhost" | "roxy") && request.port == 8080 {
+    if matches!((request.host.as_str(), request.port), ("roxy", _) | ("127.0.0.1" | "localhost", 8080)) {
         let response = web_page::generate_response();
         return connections::send_response(&mut client, &response).await;
     }
@@ -164,23 +164,13 @@ async fn send_repeater(sender: &mpsc::Sender<events::ProxyEvents>, request: http
 
         let result = if let http::Protocol::HTTPS = request.protocol {
             match connections::connect_tls(&request).await {
-                Ok(mut server) => {
-                    connections::send_request(&mut server, &request).await
-                }
-                Err(e) => {
-                    let _ = sender.send(events::ProxyEvents::Error(e.to_string())).await;
-                    return;
-                }
+                Ok(mut server) => connections::send_request(&mut server, &request).await,
+                Err(e) => Err(e)
             }
         } else {
             match connections::connect_to_server(&request).await {
-                Ok(mut server) => {
-                    connections::send_request(&mut server, &request).await
-                }
-                Err(e) => {
-                    let _ = sender.send(events::ProxyEvents::Error(e.to_string())).await;
-                    return;
-                }
+                Ok(mut server) => connections::send_request(&mut server, &request).await,
+                Err(e) => Err(e)
             }
 
         };
@@ -188,10 +178,11 @@ async fn send_repeater(sender: &mpsc::Sender<events::ProxyEvents>, request: http
 
         match result {
             Ok(response) => {
-                let _ = sender.send(events::ProxyEvents::RepeaterResponse { index, response }).await;
+                let _ = sender.send(events::ProxyEvents::RepeaterResponse { index, response: Some(response) }).await;
             }
 
             Err(e) => {
+                let _ = sender.send(events::ProxyEvents::RepeaterResponse { index, response: None }).await;
                 let _ = sender.send(events::ProxyEvents::Error(e.to_string())).await;
             }
         }
