@@ -13,7 +13,17 @@ pub fn edit(initial: &str) -> io::Result<String> {
                 "Environment variable EDITOR not found",
         ))?;
 
-    let status = Command::new(&editor)
+    let mut args = editor.split_whitespace();
+
+    let program = args.next().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "EDITOR is empty",
+        )
+    })?;
+
+    let status = Command::new(program)
+        .args(args)
         .arg(file.path())
         .status()
         .map_err(|e| {
