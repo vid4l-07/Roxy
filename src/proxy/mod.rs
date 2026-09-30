@@ -106,7 +106,10 @@ async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
     // HTTPS
     if request.method.eq_ignore_ascii_case("CONNECT") {
 
-        let (mut client, request) = connections::handle_https(client, &request).await?;
+        let (mut client, request) = match connections::handle_https(client, &request).await {
+            Ok(value) => value,
+            Err(_) => return Ok(()),
+        };
 
         let request = if intercept{
             let (tx, rx) = oneshot::channel();
