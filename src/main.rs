@@ -1,4 +1,5 @@
 use tokio::sync::mpsc;
+use clap::Parser;
 
 mod http;
 mod editor;
@@ -9,9 +10,10 @@ mod proxy;
 mod events;
 mod web_page;
 mod certs;
+mod config;
 
 fn wellcome_screen() {
-    print!("
+print!("
   ██████╗  ██████╗ ██╗  ██╗██╗   ██╗
   ██╔══██╗██╔═══██╗╚██╗██╔╝╚██╗ ██╔╝
   ██████╔╝██║   ██║ ╚███╔╝  ╚████╔╝ 
@@ -26,6 +28,10 @@ fn wellcome_screen() {
 
 #[tokio::main]
 async fn main() {
+    let args = config::Args::parse();
+
+    let config = config::Config::from(args);
+
     wellcome_screen();
     let (proxy_sender, proxy_receiver) = mpsc::channel::<events::ProxyEvents>(32);
     let (tui_sender, tui_receiver) = mpsc::channel::<events::TuiEvents>(32);
@@ -33,7 +39,7 @@ async fn main() {
     let mut app = app::App::new();
 
     tokio::spawn(async move {
-        if let Err(error) = proxy::start(&proxy_sender, tui_receiver).await {
+        if let Err(error) = proxy::start(&proxy_sender, tui_receiver, config).await {
             let _ = proxy_sender.send(events::ProxyEvents::FatalError(error.to_string())).await;
         }
     });

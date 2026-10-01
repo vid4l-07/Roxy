@@ -9,6 +9,7 @@ use std::io;
 
 use crate::{events, http};
 use crate::web_page;
+use crate::config;
 
 mod connections;
 
@@ -22,8 +23,10 @@ async fn send_event(sender: &mpsc::Sender<events::ProxyEvents>, event: events::P
         })
 }
 
-pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mpsc::Receiver<events::TuiEvents>) -> io::Result<()>{
-    let listener = TcpListener::bind("127.0.0.1:8080").await?;
+pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mpsc::Receiver<events::TuiEvents>,
+    config: config::Config) -> io::Result<()> {
+
+    let listener = TcpListener::bind(format!("{}:{}", config.host, config.port)).await?;
 
     let mut intercept = false;
     let mut next_id = 0;
@@ -50,8 +53,10 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
                 let sender = sender.clone();
                 let pending_sender = pending_sender.clone();
 
+                let config = config.clone();
+
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(client, id, intercept, sender.clone(), pending_sender).await {
+                    if let Err(e) = handle_connection(client, id, intercept, config, sender.clone(), pending_sender).await {
                         let _ = send_event(&sender, events::ProxyEvents::Error(e.to_string())).await; 
                     }
                 });
@@ -93,14 +98,15 @@ pub async fn start(sender: &mpsc::Sender<events::ProxyEvents>, mut receiver: mps
     }
 }
 
-async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
+async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool, config: config::Config,
     tui_sender: mpsc::Sender<events::ProxyEvents>, proxy_sender: mpsc::Sender<(usize, oneshot::Sender<http::Request>)>) -> io::Result<()> {
 
     let Ok(request) = connections::get_request(&mut client).await else {
         return Ok(())
     };
 
-    if matches!((request.host.as_str(), request.port), ("roxy", _) | ("127.0.0.1" | "localhost", 8080)) {
+    if request.host == "roxy" || (request.host == config.host || request.host == "localhost") && request.port == config.port {
+
         let response = if request.target == "/ca.crt" {
             match web_page::download_ca() {
                 Ok(value) => value,
@@ -115,6 +121,12 @@ async fn handle_connection(mut client: TcpStream, id: usize, intercept: bool,
 
     // HTTPS
     if request.method.eq_ignore_ascii_case("CONNECT") {
+
+        if (config.https.passthrough || config.https.passthrough_hosts.contains(&request.host.to_ascii_lowercase())) 
+            && !config.https.intercept_hosts.contains(&request.host.to_ascii_lowercase()) {
+            connections::https_passthrough(client, &request).await?;
+            return Ok(())
+        }
 
         let Ok((mut client, request)) = connections::handle_https(client, &request).await else {
             return Ok(())

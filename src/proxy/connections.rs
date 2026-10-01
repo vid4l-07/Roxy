@@ -87,3 +87,13 @@ pub async fn connect_tls(request: &http::Request) -> io::Result<tokio_rustls::cl
         )
     })
 }
+
+pub async fn https_passthrough(mut client: TcpStream, request: &http::Request) -> io::Result<()> {
+    let mut server = connect_to_server(request).await?;
+
+    client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
+
+    tokio::io::copy_bidirectional(&mut client, &mut server).await?;
+
+    Ok(())
+}

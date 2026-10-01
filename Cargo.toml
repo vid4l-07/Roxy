@@ -20,3 +20,4 @@ rcgen = { version = "0.13", features = ["x509-parser"] }
 rustls-pemfile = "2.2.0"
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12", "logging"] }
 webpki-roots = "1.0.9"
+clap = { version = "4.6.7", features = ["derive"] }
