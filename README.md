@@ -21,9 +21,11 @@ Think of it as a minimal, terminal-native alternative to Burp Suite for everyday
 
 - **HTTP interception** — capture and inspect requests in real time before they reach the server.
 - **HTTPS interception** — full MITM support through `CONNECT`, with certificates generated automatically.
-- **Automatic certificate authority** — a local CA is created on first use and leaf certificates are issued per host on demand. Nothing to configure by hand.
+- **TLS passthrough** (optional) — keeps HTTPS traffic untouched, either for every host or for a selected list.
+- **Automatic certificate authority** — a local CA is created on first HTTPS request and leaf certificates are issued per host on demand.
 - **Request editing** — modify intercepted requests on the fly with your `$EDITOR`.
 - **Repeater** — resend and tweak requests manually, in separate tabs, like Burp Suite's Repeater.
+- **Command-line options** — set the listening address with `--host` and `--port`, and decide which hosts get intercepted or passed through.
 - **Custom TUI** — clean and responsive interface built with [ratatui](https://ratatui.rs/).
 
 ## Requirements
@@ -57,6 +59,9 @@ The binary will be available at `~/.cargo/bin/roxy`.
 
 ## HTTPS support
 
+> [!note]
+> If [HTTPS passthrough](#usage) is enabled, HTTPS support is not required.
+
 ### Where the certificates live
 
 | What | Location | Notes |
@@ -71,7 +76,9 @@ Roxy generates a self-signed CA named `Roxy CA`.
 >[!Warning]
 > Every HTTPS request will fail validation until the CA is trusted by the client.
 
-Install `~/.config/roxy/ca.crt` in your browser or system.
+Install `~/.config/roxyca.crt` in your browser or system.
+
+You can also download it from the built-in web page at `http://roxy` (or `http://<host>:<port>`).
 
 **Firefox / Chrome**:
 1. `Settings` → `Privacy & Security` → `Certificates` → `View Certificates`.
@@ -103,6 +110,22 @@ Roxy generates a new CA on the next HTTPS request and removes every leaf certifi
 You will have to trust the new CA again. Remember to remove the old one from your browser and system store.
 
 ## Usage
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `-h`, `--host <HOST>` | Listening host. Defaults to `127.0.0.1`. |
+| `-p`, `--port <PORT>` | Listening port. Defaults to `8080`. |
+| `--passthrough` | Tunnel HTTPS without decrypting it, for every host. |
+| `--passthrough-host <HOSTS>` | Same as `--passthrough`, but only for the listed hosts. |
+| `--intercept-https <HOSTS>` | Intercept these hosts even in passthrough mode. |
+| `--help` | Print the help message. |
+
+```bash
+# Pass every host through untouched except the one you want to inspect
+roxy --passthrough --intercept-https <HOSTS>
+```
 
 ### Global
 
@@ -151,8 +174,8 @@ The modified request replaces the original and `Content-Length` is recalculated 
 
 ## How it works
 
-1. **The listener** accepts connections on `127.0.0.1:8080` and handles each one in its own async task.
-2. **A plain `CONNECT` request** is answered with `200 Connection Established`, TLS is terminated locally with a certificate issued for the requested host, and the decrypted request is read as a regular HTTP request.
+1. **The listener** accepts connections on `127.0.0.1:8080` by default, configurable with `--host` and `--port`, and handles each one in its own async task.
+2. **A plain `CONNECT` request** is answered with `200 Connection Established`, TLS is terminated locally with a certificate issued for the requested host, and the decrypted request is read as a regular HTTP request. Hosts matched by the passthrough options are relayed to the real server instead, without terminating TLS.
 3. **Any other request** is read directly as plain HTTP, resolving the destination from the absolute target or the `Host` header.
 4. **Intercept ON**: the request is pushed to the TUI over a `tokio::mpsc` channel and the connection waits on a `oneshot` channel until the user forwards it. The request can be forwarded as-is, edited first, or sent to the Repeater.
 5. **Intercept OFF**: the request is forwarded immediately.
@@ -171,3 +194,4 @@ Contributions are always welcome. If you find a bug or want to help with new fea
 ## License
 
 Roxy is released under the [MIT License](LICENSE). © 2026 Hugo Vidal Martinez.
+
