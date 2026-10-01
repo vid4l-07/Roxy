@@ -8,6 +8,8 @@ https://github.com/user-attachments/assets/94f9c9ae-5842-4b19-9f5b-84dedb9430e6
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Rust 2024](https://img.shields.io/badge/rust-2024-orange.svg)](Cargo.toml)
 
+**[Features](#features)** · **[Installation](#installation)** · **[HTTPS support](#https-support)** · **[Usage](#usage)** · **[How it works](#how-it-works)**
+
 </div>
 
 
@@ -28,7 +30,9 @@ Think of it as a minimal, terminal-native alternative to Burp Suite for everyday
 - **Command-line options** — set the listening address with `--host` and `--port`, and decide which hosts get intercepted or passed through.
 - **Custom TUI** — clean and responsive interface built with [ratatui](https://ratatui.rs/).
 
-## Requirements
+## Installation
+
+### Requirements
 
 To build it from source you need:
 
@@ -37,8 +41,6 @@ To build it from source you need:
 | Rust 1.85 or newer | Check with `rustc --version`. |
 | A C compiler | `gcc` or `clang`.  |
 | `$EDITOR` | Only needed for the request editing feature. |
-
-## Installation
 
 ### Build from source
 
@@ -194,4 +196,5 @@ Contributions are always welcome. If you find a bug or want to help with new fea
 ## License
 
 Roxy is released under the [MIT License](LICENSE). © 2026 Hugo Vidal Martinez.
+
 
